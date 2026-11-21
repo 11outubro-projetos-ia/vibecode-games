@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aventura das Plataformas</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:#171333;color:white;font-family:Arial,sans-serif;text-align:center}
+h2{font-size:22px}
+.info{display:flex;justify-content:space-between;max-width:400px;margin:10px auto}
+canvas{width:100%;max-width:400px;height:auto;border:3px solid #8c68ff;border-radius:15px;touch-action:none;background:#a6e8ff}
+.controls{display:flex;justify-content:space-between;max-width:400px;margin:14px auto;gap:10px}
+button{border:0;border-radius:15px;padding:15px;background:#8055e8;color:white;font-size:20px;font-weight:bold;touch-action:none}
+.controls button{flex:1}
+#jump{background:#ffbd45;color:#33205e}
+#restart{font-size:16px;background:#44356d}
+#message{min-height:24px;color:#ffe18b;font-weight:bold}
+</style>
+<style>/* ajuste Fliperama: canvas cabe na altura da tela */ #game{width:auto;height:auto;max-width:min(100%,400px);max-height:max(220px,calc(100vh - 330px))}</style>
+</head>
+<body>
+
+<h2>🌟 Aventura das Plataformas</h2>
+<div class="info">
+  <span>⭐ Estrelas: <b id="score">0</b></span>
+  <span id="hudFase">Fase 1/5 · ❤️ 3</span>
+</div>
+
+<canvas id="game" width="360" height="520"></canvas>
+
+<div class="controls">
+  <button id="left">◀</button>
+  <button id="right">▶</button>
+  <button id="jump">PULAR ⤴</button>
+</div>
+
+<p id="message">Pegue as estrelas e não caia!</p>
+<button id="restart">🔄 Recomeçar</button>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreText = document.getElementById("score");
+const message = document.getElementById("message");
+const hudFase = document.getElementById("hudFase");
+
+const W = 360, H = 520;
+const G_PULO = -10.5, GRAV = 0.45, VEL = 3.2;
+
+/* ---------- FASES ----------
+   p: plataformas [x,y,largura]  (m = movimento {eixo,min,max,vel})
+   s: estrelas [x,y]   portal: [x,y]   e: inimigos (índice da plataforma) */
+const FASES = [
+  { nome: "Céu Azul", ceu: ["#91e4ff", "#f3faff"],
+    p: [[0,475,360,45],[35,400,100],[190,335,100],[50,270,105],[215,205,100],[110,140,100]],
+    s: [[80,370],[235,305],[100,240],[265,175],[160,110]], portal: [315,425], e: [] },
+  { nome: "Buraco no Chão", ceu: ["#ffd6a5", "#fff6e8"],
+    p: [[0,475,150,45],[230,475,130,45],[20,410,90],[150,350,80],[260,295,90],[140,235,80],[20,180,90],[150,125,80],[270,90,90]],
+    s: [[60,380],[190,320],[300,265],[180,205],[60,150],[190,95]], portal: [305,40], e: [] },
+  { nome: "Plataformas Móveis", ceu: ["#7fe0d6", "#eafffb"],
+    p: [[0,475,110,45],[270,475,90,45],{x:120,y:440,w:60,m:{eixo:"x",min:115,max:205,vel:0.9}},[270,400,90],
+        {x:130,y:340,w:70,m:{eixo:"x",min:110,max:200,vel:1.1}},[20,290,90],{x:130,y:230,w:60,m:{eixo:"y",min:170,max:250,vel:0.7}},[240,170,100],[80,105,90]],
+    s: [[60,445],[310,370],[165,305],[60,260],[290,140],[200,140]], portal: [100,55], e: [] },
+  { nome: "Gosmas Guardiãs", ceu: ["#b39cff", "#f1ecff"],
+    p: [[0,475,100,45],[150,475,80,45],[280,475,80,45],[60,405,90],[200,350,90],[40,290,100],[190,225,90],[300,170,60],[150,115,90]],
+    s: [[190,445],[105,375],[245,320],[90,260],[235,195],[330,140]], portal: [180,65], e: [3,5,8] },
+  { nome: "Pôr do Sol Final", ceu: ["#ff9a6b", "#ffe7c2"],
+    p: [[0,475,90,45],[290,475,70,45],{x:110,y:440,w:60,m:{eixo:"x",min:100,max:220,vel:1.2}},[270,390,90],
+        {x:120,y:330,w:70,m:{eixo:"x",min:100,max:200,vel:1.3}},[10,275,90],{x:130,y:220,w:60,m:{eixo:"y",min:160,max:240,vel:0.9}},[240,160,110],[90,95,90]],
+    s: [[45,445],[315,360],[150,300],[55,245],[160,190],[295,130],[200,70]], portal: [115,45], e: [3,5,7] }
+];
+
+let fase = 0, vidas = 3, player, stars, platforms, enemies, portal, score, running, won, parts = [], tempo = 0;
+const keys = { left: false, right: false };
+
+function carregarFase(n) {
+  fase = n;
+  const F = FASES[n];
+  platforms = F.p.map(p => Array.isArray(p)
+    ? { x: p[0], y: p[1], w: p[2], h: p[3] || 14, dx: 0, dy: 0 }
+    : { x: p.x, y: p.y, w: p.w, h: 14, m: { ...p.m, dir: 1 }, dx: 0, dy: 0 });
+  stars = F.s.map(([x, y]) => ({ x, y, got: false }));
+  enemies = F.e.map(i => { const p = platforms[i]; return { p, x: p.x + p.w / 2, dir: 1, vel: 0.8 + n * 0.12 }; });
+  portal = { x: F.portal[0], y: F.portal[1] };
+  player = { x: 20, y: 430, w: 24, h: 32, vx: 0, vy: 0, onGround: false, chao: null, olha: 1, squash: 0 };
+  score = 0; running = true; won = false; parts = [];
+  atualizarHud();
+  message.textContent = "Fase " + (n + 1) + ": " + F.nome + " — pegue todas as estrelas para abrir o portal!";
+}
+function atualizarHud() {
+  scoreText.textContent = score + "/" + stars.length;
+  hudFase.textContent = "Fase " + (fase + 1) + "/" + FASES.length + " · ❤️ " + vidas;
+}
+function reset() { vidas = 3; carregarFase(0); }
+
+function estrela(x, y, r, giro) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5 + giro;
+    const rr = i % 2 ? r * 0.42 : r;
+    const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+
+function draw() {
+  const F = FASES[fase];
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, F.ceu[0]); sky.addColorStop(1, F.ceu[1]);
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+  // Nuvens (andando devagar)
+  ctx.fillStyle = "rgba(255,255,255,.9)";
+  [[45, 55], [180, 80], [290, 45]].forEach(([x, y], i) => {
+    const cx = (x + tempo * (6 + i * 3)) % (W + 60) - 30;
+    ctx.beginPath(); ctx.arc(cx, y, 15, 0, Math.PI * 2); ctx.arc(cx + 17, y + 5, 12, 0, Math.PI * 2); ctx.arc(cx - 14, y + 6, 10, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // Plataformas
+  platforms.forEach(p => {
+    const chao = p.h > 14;
+    ctx.fillStyle = chao ? "#38b879" : p.m ? "#e0892b" : "#7955d9";
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.fillStyle = chao ? "#8af0ad" : p.m ? "#ffc27a" : "#bba6ff";
+    ctx.fillRect(p.x, p.y, p.w, 4);
+    if (chao) { ctx.fillStyle = "#2d9a63"; for (let x = p.x + 6; x < p.x + p.w; x += 18) ctx.fillRect(x, p.y + 14, 6, 4); }
+    if (p.m) { ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.fillRect(p.x + p.w / 2 - 6, p.y + 6, 12, 3); }
+  });
+
+  // Portal (fechado até pegar todas as estrelas)
+  const aberto = score === stars.length;
+  if (aberto) {
+    const g = ctx.createRadialGradient(portal.x + 13, portal.y + 25, 2, portal.x + 13, portal.y + 25, 40);
+    g.addColorStop(0, "rgba(80,255,170,.7)"); g.addColorStop(1, "rgba(80,255,170,0)");
+    ctx.fillStyle = g; ctx.fillRect(portal.x - 30, portal.y - 20, 90, 90);
+  }
+  ctx.fillStyle = aberto ? "#22c978" : "#6d6d80";
+  ctx.fillRect(portal.x, portal.y, 27, 50);
+  ctx.fillStyle = aberto ? "#b9ffd9" : "#44445a";
+  ctx.fillRect(portal.x + 4, portal.y + 4, 19, 42);
+  if (aberto) { ctx.fillStyle = "white"; ctx.fillRect(portal.x + 7, portal.y + 12, 4, 4); ctx.fillRect(portal.x + 17, portal.y + 12, 4, 4); }
+  else { ctx.fillStyle = "#ffd23f"; ctx.font = "bold 14px Arial"; ctx.textAlign = "center"; ctx.fillText("🔒", portal.x + 13, portal.y + 32); }
+
+  // Estrelas (girando e flutuando)
+  ctx.fillStyle = "#ffb923"; ctx.strokeStyle = "#ff861e"; ctx.lineWidth = 2;
+  stars.forEach((s, i) => { if (!s.got) estrela(s.x, s.y + Math.sin(tempo * 3 + i) * 3, 12, Math.sin(tempo * 2 + i) * 0.3); });
+
+  // Inimigos (gosmas)
+  enemies.forEach(e => {
+    const y = e.p.y, sq = Math.abs(Math.sin(tempo * 6 + e.x * 0.1)) * 3;
+    ctx.fillStyle = "#3ccf4e";
+    ctx.beginPath(); ctx.ellipse(e.x, y - 9 + sq / 2, 13 + sq / 2, 10 - sq / 2, 0, Math.PI, 0); ctx.lineTo(e.x + 13, y); ctx.lineTo(e.x - 13, y); ctx.fill();
+    ctx.fillStyle = "white"; ctx.fillRect(e.x - 7 + e.dir * 2, y - 14, 5, 5); ctx.fillRect(e.x + 2 + e.dir * 2, y - 14, 5, 5);
+    ctx.fillStyle = "#1a3a1a"; ctx.fillRect(e.x - 5 + e.dir * 3, y - 12, 2, 3); ctx.fillRect(e.x + 4 + e.dir * 3, y - 12, 2, 3);
+  });
+
+  // Partículas
+  parts.forEach(p => { ctx.globalAlpha = Math.max(0, p.v); ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, 4, 4); });
+  ctx.globalAlpha = 1;
+
+  // Personagem (com "amassadinho" ao pousar e olhos para o lado que anda)
+  const sq = player.squash;
+  const pw = player.w + sq * 6, ph = player.h - sq * 6;
+  const px = player.x - sq * 3, py = player.y + sq * 6;
+  ctx.fillStyle = "#ff6085"; ctx.fillRect(px, py, pw, ph);
+  ctx.fillStyle = "white";
+  ctx.fillRect(px + 5, py + 7, 5, 6); ctx.fillRect(px + pw - 10, py + 7, 5, 6);
+  ctx.fillStyle = "#30205c";
+  const o = player.olha > 0 ? 2 : 0;
+  ctx.fillRect(px + 6 + o, py + 9, 2, 3); ctx.fillRect(px + pw - 9 + o, py + 9, 2, 3);
+}
+
+function perderVida(txt) {
+  running = false;
+  vidas--;
+  SOM.dano();
+  atualizarHud();
+  if (vidas <= 0) {
+    message.textContent = "💀 Fim de jogo! Toque em Recomeçar.";
+    setTimeout(SOM.derrota, 300);
+  } else {
+    message.textContent = txt + " Vidas: " + vidas;
+    setTimeout(() => { if (vidas > 0 && !running) { const v = vidas; carregarFase(fase); vidas = v; atualizarHud(); } }, 1200);
+  }
+}
+
+let ultimo = 0;
+function loop(t) {
+  const k = Math.min(2, ((t - ultimo) / 16.67) || 1); ultimo = t;
+  tempo += k / 60;
+  if (running) passo(k);
+  parts.forEach(p => { p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.15 * k; p.v -= 0.03 * k; });
+  parts = parts.filter(p => p.v > 0);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function passo(k) {
+  // plataformas móveis
+  platforms.forEach(p => {
+    p.dx = p.dy = 0;
+    if (!p.m) return;
+    const v = p.m.vel * p.m.dir * k;
+    if (p.m.eixo === "x") { p.x += v; p.dx = v; if (p.x < p.m.min || p.x > p.m.max) p.m.dir *= -1; }
+    else { p.y += v; p.dy = v; if (p.y < p.m.min || p.y > p.m.max) p.m.dir *= -1; }
+  });
+  // carregado pela plataforma onde está em pé
+  if (player.onGround && player.chao) { player.x += player.chao.dx; player.y += player.chao.dy; }
+
+  player.vx = (keys.left ? -VEL : 0) + (keys.right ? VEL : 0);
+  if (player.vx) player.olha = Math.sign(player.vx);
+  player.x += player.vx * k;
+  player.x = Math.max(0, Math.min(W - player.w, player.x));
+
+  const oldY = player.y;
+  player.vy += GRAV * k;
+  player.y += player.vy * k;
+  const estavaNoChao = player.onGround;
+  player.onGround = false; player.chao = null;
+  platforms.forEach(p => {
+    if (player.vy >= 0 && oldY + player.h <= p.y + Math.abs(p.dy) + 1 && player.y + player.h >= p.y &&
+        player.x + player.w > p.x && player.x < p.x + p.w) {
+      player.y = p.y - player.h; player.vy = 0; player.onGround = true; player.chao = p;
+    }
+  });
+  if (player.onGround && !estavaNoChao) { player.squash = 1; }
+  player.squash = Math.max(0, player.squash - 0.12 * k);
+
+  stars.forEach(s => {
+    if (!s.got && player.x < s.x + 12 && player.x + player.w > s.x - 12 && player.y < s.y + 12 && player.y + player.h > s.y - 12) {
+      s.got = true; score++; atualizarHud();
+      SOM.moeda();
+      for (let i = 0; i < 10; i++) parts.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 4, vy: -Math.random() * 3, v: 1, c: "#ffd23f" });
+      if (score === stars.length) { message.textContent = "✨ Portal aberto! Corra até ele!"; SOM.item(); }
+    }
+  });
+
+  // inimigos andam de um lado para o outro na plataforma
+  enemies.forEach(e => {
+    e.x += e.dir * e.vel * k + e.p.dx;
+    if (e.x < e.p.x + 12 || e.x > e.p.x + e.p.w - 12) e.dir *= -1;
+    e.x = Math.max(e.p.x + 12, Math.min(e.p.x + e.p.w - 12, e.x));
+    const ey = e.p.y;
+    if (player.x < e.x + 11 && player.x + player.w > e.x - 11 && player.y < ey && player.y + player.h > ey - 18) {
+      // pular em cima da gosma derrota ela
+      if (player.vy > 0 && oldY + player.h <= ey - 10) {
+        e.morta = true; player.vy = G_PULO * 0.6; SOM.golpe();
+        for (let i = 0; i < 12; i++) parts.push({ x: e.x, y: ey - 8, vx: (Math.random() - 0.5) * 5, vy: -Math.random() * 3, v: 1, c: "#3ccf4e" });
+      } else if (running) perderVida("Ai! Uma gosma te pegou.");
+    }
+  });
+  enemies = enemies.filter(e => !e.morta);
+  if (!running) return;
+
+  if (player.y > H) { perderVida("Ops! Você caiu."); return; }
+
+  if (score === stars.length && player.x + player.w > portal.x && player.x < portal.x + 27 && player.y + player.h > portal.y && player.y < portal.y + 50) {
+    running = false;
+    if (fase < FASES.length - 1) {
+      message.textContent = "🎉 Fase " + (fase + 1) + " completa!";
+      SOM.fase();
+      setTimeout(() => { const v = vidas; carregarFase(fase + 1); vidas = v; atualizarHud(); }, 1300);
+    } else {
+      won = true;
+      message.textContent = "🏆 Você venceu todas as " + FASES.length + " fases!";
+      SOM.vitoria();
+    }
+  }
+}
+
+function jump() {
+  if (running && player.onGround) {
+    player.vy = G_PULO;
+    player.onGround = false;
+    SOM.pulo();
+  }
+}
+
+function holdButton(id, key) {
+  const b = document.getElementById(id);
+  b.addEventListener("pointerdown", e => { e.preventDefault(); keys[key] = true; b.setPointerCapture(e.pointerId); });
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach(ev => b.addEventListener(ev, () => keys[key] = false));
+}
+holdButton("left", "left");
+holdButton("right", "right");
+document.getElementById("jump").addEventListener("pointerdown", e => { e.preventDefault(); jump(); });
+
+document.addEventListener("keydown", e => {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", " "].includes(e.key)) e.preventDefault();
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+  if ((e.key === "ArrowUp" || e.key === " " || e.key === "w") && !e.repeat) jump();
+});
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+});
+window.addEventListener("blur", () => { keys.left = keys.right = false; });
+
+document.getElementById("restart").addEventListener("click", e => { e.currentTarget.blur(); reset(); });
+
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

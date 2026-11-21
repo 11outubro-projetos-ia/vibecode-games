@@ -1,0 +1,11 @@
+# Arquivos originais guardados como backup local
+_originais/
+
+# Arquivos do sistema e editores
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Respostas do formulário e controle interno (têm nomes completos dos alunos)
+*.csv
+PENDENTES.md

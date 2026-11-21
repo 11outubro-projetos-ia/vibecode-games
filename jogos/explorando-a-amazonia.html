@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#10271b">
+<title>Explorando a Amazônia</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10271b;font-family:Arial,sans-serif;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;inset:0;pointer-events:none;color:white;text-shadow:0 2px 5px #102016}
+#brand,#stats .pill{background:#10271bbd;border:1px solid #ffffff38;border-radius:12px;padding:9px}
+#brand{position:absolute;top:12px;left:12px}
+#brand strong{display:block;font-size:14px}
+#brand small{font-size:11px}
+#stats{position:absolute;top:12px;right:12px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:62%}
+.pill{font-size:12px}
+#hint{position:absolute;top:17%;left:50%;transform:translateX(-50%);background:#10271bdc;padding:10px;border-radius:12px;font-size:12px;text-align:center}
+#message{position:absolute;bottom:20%;left:50%;transform:translateX(-50%);background:#10271be8;padding:12px;border-radius:12px;text-align:center;opacity:0;transition:.3s}
+#message.show{opacity:1}
+#help{position:absolute;bottom:12px;left:12px;font-size:11px;background:#10271baa;padding:8px;border-radius:8px}
+#touch{position:fixed;inset:0;pointer-events:none;display:none}
+#stick{pointer-events:auto;position:absolute;left:20px;bottom:25px;width:115px;height:115px;border-radius:50%;background:#ffffff22;border:2px solid #ffffff80}
+#knob{position:absolute;left:32px;top:32px;width:48px;height:48px;border-radius:50%;background:#ffffffbb;border:2px solid white}
+.touchBtn{pointer-events:auto;position:absolute;right:20px;bottom:35px;width:66px;height:66px;border-radius:50%;border:2px solid white;background:#234c31dd;color:white;font-weight:bold}
+#runBtn{right:95px;bottom:25px;width:55px;height:55px;font-size:11px}
+#loading{position:fixed;inset:0;z-index:5;display:grid;place-items:center;background:#10271b;color:white;text-align:center;padding:25px}
+#loading div{max-width:340px}
+#loading h1{font-size:25px}
+#loading p{font-size:13px;line-height:1.5;color:#d4e8d5}
+#start{background:#d6e9a7;color:#183421;border:0;padding:13px 23px;border-radius:12px;font-weight:bold}
+@media(pointer:coarse),(max-width:800px){
+#touch{display:block}
+#help{display:none}
+#brand{top:8px;left:8px;padding:7px}
+#brand strong{font-size:12px}
+#stats{top:8px;right:8px}
+.pill{font-size:10px;padding:7px}
+}
+</style>
+</head>
+<body>
+
+<div id="loading">
+<div>
+<h1>🌿 Explorando a Amazônia</h1>
+<p>Explore a floresta, navegue pelo rio, encontre as 12 descobertas escondidas e aviste os 8 animais da Amazônia!</p>
+<button id="start">ENTRAR NA FLORESTA</button>
+<p id="aviso3d">É necessária conexão com a internet para carregar o 3D.</p>
+<p id="recordeInicio"></p>
+</div>
+</div>
+
+<div id="hud">
+<div id="brand">
+<strong>🌳 EXPLORANDO A AMAZÔNIA</strong>
+<small>Mundo aberto • Exploração livre</small>
+</div>
+<div id="stats">
+<div class="pill">🍃 Descobertas: <b id="count">0</b>/12</div>
+<div class="pill">🐾 Animais: <b id="animaisCount">0</b>/8</div>
+<div class="pill">🧭 <b id="zone">Trilha Verde</b></div>
+<div class="pill">📡 <b id="radar">—</b></div>
+<div class="pill">⏱️ <b id="tempo">0:00</b></div>
+</div>
+<div id="hint">Explore a floresta e encontre os símbolos brilhantes 🍃</div>
+<div id="message"></div>
+<div id="help">WASD: mover • Mouse: olhar • Shift: correr • Espaço: pular</div>
+</div>
+
+<div id="touch">
+<div id="stick"><div id="knob"></div></div>
+<button class="touchBtn" id="jumpBtn">PULAR</button>
+<button class="touchBtn" id="runBtn">CORRER</button>
+</div>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+setTimeout(()=>{if(!window.__amazoniaOK){const a=document.getElementById('aviso3d');if(a)a.innerHTML='⚠️ O 3D não carregou. Verifique a internet e recarregue a página.';}},9000);
+</script>
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+window.__amazoniaOK=true;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9bc6b0);
+scene.fog = new THREE.FogExp2(0x9bc6b0,0.0115);
+
+const camera = new THREE.PerspectiveCamera(
+65,innerWidth/innerHeight,0.1,450
+);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xdaf5e8,0x34452a,2));
+
+const sun=new THREE.DirectionalLight(0xffefc4,2.1);
+sun.position.set(-45,75,35);
+sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+// a sombra acompanha o explorador
+Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:200});
+scene.add(sun,sun.target);
+
+const mat=(color)=>new THREE.MeshStandardMaterial({color});
+
+const ground=new THREE.Mesh(
+new THREE.PlaneGeometry(420,420),
+mat(0x526b35)
+);
+ground.rotation.x=-Math.PI/2;
+ground.position.y=-0.08;
+ground.receiveShadow=true;
+scene.add(ground);
+
+// Vegetação do solo
+for(let i=0;i<45;i++){
+const p=new THREE.Mesh(
+new THREE.CircleGeometry(2+Math.random()*5,18),
+mat([0x607b3c,0x496333,0x718347][i%3])
+);
+p.rotation.x=-Math.PI/2;
+const px=(Math.random()-.5)*180,pz=(Math.random()-.5)*180;
+if(Math.abs(px-Math.sin((pz+130)/11*.31)*19)<14)continue;
+p.position.set(px,-.07,pz);
+p.scale.set(1+Math.random(),1,.5+Math.random());
+scene.add(p);
+}
+
+// Rio Amazonas: faixa plana colada no chão (margem de lama + água + canal mais fundo)
+function faixaRio(meiaLargura,y){
+ const N=320,pos=[],idx=[];
+ for(let i=0;i<=N;i++){
+  const z=-210+i*420/N,x=Math.sin((z+130)/11*.31)*19;
+  const dxdz=Math.cos((z+130)/11*.31)*19*.31/11,len=Math.hypot(1,dxdz);
+  const nx=1/len,nz=-dxdz/len;
+  pos.push(x-nx*meiaLargura,y,z-nz*meiaLargura, x+nx*meiaLargura,y,z+nz*meiaLargura);
+  if(i<N){const a=i*2;idx.push(a,a+2,a+1, a+1,a+2,a+3);}
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+ return g;
+}
+const margem=new THREE.Mesh(faixaRio(7.2,-.05),mat(0x6b5a3a));margem.receiveShadow=true;scene.add(margem);
+const river=new THREE.Mesh(faixaRio(5.2,-.02),new THREE.MeshStandardMaterial({color:0x277d91,roughness:.15,metalness:.1}));
+river.receiveShadow=true;scene.add(river);
+const canal=new THREE.Mesh(faixaRio(2.6,-.01),new THREE.MeshStandardMaterial({color:0x1d6475,roughness:.15,metalness:.1}));scene.add(canal);
+
+// ===== FLORESTA DENSA (InstancedMesh: muitas árvores sem pesar) =====
+const riverX=z=>Math.sin((z+130)/11*.31)*19;
+const livre=(x,z,rio=8,centro=12)=>Math.hypot(x,z)>=centro&&Math.abs(x-riverX(z))>=rio&&Math.hypot(x+17,z+22)>=8;
+const trees=[];
+const dummy=new THREE.Object3D();
+const corTmp=new THREE.Color();
+const LIMITE=188;
+
+// --- árvores comuns (tronco + 3 copas) ---
+const NARV=950;
+const trunkIM=new THREE.InstancedMesh(new THREE.CylinderGeometry(.22,.38,4.2,7),mat(0x59402a),NARV);
+const crownIM=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.6,1),new THREE.MeshStandardMaterial({color:0xffffff}),NARV*3);
+trunkIM.castShadow=crownIM.castShadow=true;
+const CORES_COPA=[0x1e5937,0x2c7040,0x3d8048,0x245c49,0x2f6b2c,0x19472c,0x4a8a3a];
+let na=0;
+for(let tent=0;tent<6000&&na<NARV;tent++){
+ const x=(Math.random()-.5)*LIMITE*2,z=(Math.random()-.5)*LIMITE*2;
+ if(!livre(x,z))continue;
+ // mais denso longe do centro (mata profunda)
+ const dist=Math.hypot(x,z);
+ if(dist<45&&Math.random()<.2)continue;
+ const s=.75+Math.random()*.9+(dist>90?.35:0);
+ dummy.position.set(x,2.1*s,z);dummy.rotation.set(0,Math.random()*6,0);dummy.scale.setScalar(s);dummy.updateMatrix();
+ trunkIM.setMatrixAt(na,dummy.matrix);
+ for(let j=0;j<3;j++){
+  dummy.position.set(x+(Math.random()-.5)*.8*s,(4+j*.72)*s,z+(Math.random()-.5)*.8*s);
+  dummy.scale.set(1.05*s*(1-j*.08),.85*s,s*(1-j*.08));dummy.rotation.set(Math.random(),Math.random()*6,0);dummy.updateMatrix();
+  crownIM.setMatrixAt(na*3+j,dummy.matrix);
+  corTmp.setHex(CORES_COPA[Math.floor(Math.random()*CORES_COPA.length)]).offsetHSL(0,0,(Math.random()-.5)*.06);
+  crownIM.setColorAt(na*3+j,corTmp);
+ }
+ trees.push({position:{x,z},userData:{r:.55*s},copaY:5*s});
+ na++;
+}
+trunkIM.count=na;crownIM.count=na*3;
+scene.add(trunkIM,crownIM);
+
+// --- palmeiras de açaí (finas e altas, folhas em leque) ---
+const NPALM=280;
+const palmTrunk=new THREE.InstancedMesh(new THREE.CylinderGeometry(.09,.14,7,6),mat(0x7a6448),NPALM);
+const palmLeaf=new THREE.InstancedMesh(new THREE.BoxGeometry(.32,.04,2.6),mat(0x3f8a3a),NPALM*7);
+let np=0;
+for(let tent=0;tent<4000&&np<NPALM;tent++){
+ const x=(Math.random()-.5)*LIMITE*2,z=(Math.random()-.5)*LIMITE*2;
+ // açaí gosta da beira do rio
+ const perto=Math.abs(x-riverX(z));
+ if(!livre(x,z,6.5,10))continue;
+ if(perto>30&&Math.random()<.6)continue;
+ const s=.8+Math.random()*.6;
+ dummy.position.set(x,3.5*s,z);dummy.rotation.set((Math.random()-.5)*.12,0,(Math.random()-.5)*.12);dummy.scale.setScalar(s);dummy.updateMatrix();
+ palmTrunk.setMatrixAt(np,dummy.matrix);
+ for(let k=0;k<7;k++){
+  const a=k/7*Math.PI*2+Math.random()*.3;
+  dummy.position.set(x+Math.sin(a)*1.1*s,7*s-.25,z+Math.cos(a)*1.1*s);
+  dummy.rotation.set(0,a,0);dummy.rotateX(.55+Math.random()*.25);dummy.scale.setScalar(s);dummy.updateMatrix();
+  palmLeaf.setMatrixAt(np*7+k,dummy.matrix);
+ }
+ trees.push({position:{x,z},userData:{r:.22*s}});
+ np++;
+}
+palmTrunk.count=np;palmLeaf.count=np*7;
+palmTrunk.castShadow=palmLeaf.castShadow=true;
+scene.add(palmTrunk,palmLeaf);
+
+// --- samaúmas gigantes (com raízes tabulares) ---
+const samaumas=[];
+for(let i=0;i<9;i++){
+ let x,z;do{x=(Math.random()-.5)*330;z=(Math.random()-.5)*330;}while(!livre(x,z,14,40));
+ const g=new THREE.Group();g.position.set(x,0,z);
+ const tr=new THREE.Mesh(new THREE.CylinderGeometry(.9,1.6,22,9),mat(0x8a7a62));tr.position.y=11;tr.castShadow=true;g.add(tr);
+ for(let k=0;k<5;k++){const raiz=new THREE.Mesh(new THREE.BoxGeometry(.25,3.2,3),mat(0x7d6d55));const a=k/5*Math.PI*2;raiz.position.set(Math.sin(a)*1.6,1.4,Math.cos(a)*1.6);raiz.rotation.y=a;g.add(raiz);}
+ for(let k=0;k<6;k++){const c=new THREE.Mesh(new THREE.IcosahedronGeometry(4.5,1),mat([0x2d6b35,0x356f2b,0x24592f][k%3]));c.position.set((Math.random()-.5)*7,21+Math.random()*3,(Math.random()-.5)*7);c.scale.y=.55;c.castShadow=true;g.add(c);}
+ scene.add(g);samaumas.push(g);
+ trees.push({position:{x,z},userData:{r:2.1}});
+}
+
+// --- cipós pendurados ---
+const NCIPO=260;
+const cipoIM=new THREE.InstancedMesh(new THREE.CylinderGeometry(.03,.03,1,4),mat(0x3d5a2a),NCIPO);
+for(let i=0;i<NCIPO;i++){
+ const t=trees[Math.floor(Math.random()*na)];
+ const h=2+Math.random()*2.5,topo=(t.copaY||5)-.5;
+ dummy.position.set(t.position.x+(Math.random()-.5)*2.2,topo-h/2,t.position.z+(Math.random()-.5)*2.2);
+ dummy.rotation.set(0,0,0);dummy.scale.set(1,h,1);dummy.updateMatrix();
+ cipoIM.setMatrixAt(i,dummy.matrix);
+}
+scene.add(cipoIM);
+
+// --- samambaias e plantas baixas ---
+const NPLANTA=900;
+const folhaIM=new THREE.InstancedMesh(new THREE.ConeGeometry(.18,1.4,5),new THREE.MeshStandardMaterial({color:0xffffff}),NPLANTA*5);
+let nf=0;
+for(let i=0;i<NPLANTA;i++){
+ const x=(Math.random()-.5)*LIMITE*2,z=(Math.random()-.5)*LIMITE*2;
+ if(Math.hypot(x,z)<6||Math.abs(x-riverX(z))<5.6)continue;
+ const s=.7+Math.random()*.9;
+ for(let k=0;k<5;k++){
+  dummy.position.set(x+Math.cos(k*1.25)*.35*s,.6*s,z+Math.sin(k*1.25)*.35*s);
+  dummy.rotation.set(0,-k*1.25,0);dummy.rotateZ(-.45);dummy.scale.setScalar(s);dummy.updateMatrix();
+  folhaIM.setMatrixAt(nf,dummy.matrix);
+  folhaIM.setColorAt(nf,corTmp.setHex(CORES_COPA[(i+k)%CORES_COPA.length]));
+  nf++;
+ }
+}
+folhaIM.count=nf;scene.add(folhaIM);
+
+// --- arbustos ---
+const NARB=700;
+const arbIM=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.8,0),new THREE.MeshStandardMaterial({color:0xffffff,flatShading:true}),NARB);
+let nb=0;
+for(let i=0;i<NARB;i++){
+ const x=(Math.random()-.5)*LIMITE*2,z=(Math.random()-.5)*LIMITE*2;
+ if(Math.hypot(x,z)<7||Math.abs(x-riverX(z))<6)continue;
+ const s=.6+Math.random()*1.1;
+ dummy.position.set(x,.35*s,z);dummy.rotation.set(Math.random(),Math.random()*6,0);dummy.scale.set(s*1.2,s*.75,s);dummy.updateMatrix();
+ arbIM.setMatrixAt(nb,dummy.matrix);
+ arbIM.setColorAt(nb,corTmp.setHex(CORES_COPA[i%CORES_COPA.length]).offsetHSL(0,0,-.03));
+ nb++;
+}
+arbIM.count=nb;scene.add(arbIM);
+
+// --- flores coloridas ---
+const NFLOR=350;
+const florGeo=new THREE.SphereGeometry(.15,6,4);florGeo.scale(1,.55,1);
+const florIM=new THREE.InstancedMesh(florGeo,new THREE.MeshStandardMaterial({color:0xffffff,emissive:0x221111}),NFLOR);
+const caboIM=new THREE.InstancedMesh(new THREE.CylinderGeometry(.02,.025,1,4),mat(0x3f7a2a),NFLOR);
+const CORES_FLOR=[0xff4f8b,0xffd23f,0xff7a2f,0xb06bff,0xffffff];
+let nfl=0;
+for(let i=0;i<NFLOR*2&&nfl<NFLOR;i++){
+ const x=(Math.random()-.5)*LIMITE*2,z=(Math.random()-.5)*LIMITE*2;
+ if(Math.abs(x-riverX(z))<8)continue;
+ const h=.22+Math.random()*.35; // altura do cabinho a partir do chão (-0.08)
+ dummy.rotation.set(0,0,0);
+ dummy.position.set(x,-.08+h/2,z);dummy.scale.set(1,h,1);dummy.updateMatrix();caboIM.setMatrixAt(nfl,dummy.matrix);
+ dummy.position.set(x,-.08+h+.03,z);dummy.scale.setScalar(1);dummy.updateMatrix();
+ florIM.setMatrixAt(nfl,dummy.matrix);florIM.setColorAt(nfl,corTmp.setHex(CORES_FLOR[i%5]));
+ nfl++;
+}
+florIM.count=caboIM.count=nfl;
+scene.add(florIM,caboIM);
+
+// --- vitórias-régias no rio ---
+for(let i=0;i<40;i++){
+ const z=-125+Math.random()*250,x=riverX(z)+(Math.random()-.5)*7;
+ const v=new THREE.Mesh(new THREE.CylinderGeometry(.6+Math.random()*.6,.6,.06,14),mat(0x4f9a3a));
+ v.position.set(x,.02,z);scene.add(v);
+ if(Math.random()<.3){const fl=new THREE.Mesh(new THREE.SphereGeometry(.18,8,6),mat(0xffc0d8));fl.scale.y=.6;fl.position.set(x,.12,z);scene.add(fl);}
+}
+
+// Rochas
+for(let i=0;i<100;i++){
+const x=(Math.random()-.5)*150;
+const z=(Math.random()-.5)*150;
+if(Math.hypot(x,z)<9||Math.abs(x-riverX(z))<6.5)continue;
+const raio=.35+Math.random()*.6;
+const rock=new THREE.Mesh(
+new THREE.DodecahedronGeometry(raio),
+mat([0x777c62,0x6b705a,0x85856e][i%3])
+);
+rock.scale.y=.65;
+rock.rotation.y=Math.random()*6;
+rock.position.set(x,-.08+raio*.65*.55,z);
+rock.castShadow=true;
+scene.add(rock);
+}
+
+// Personagem explorador
+const explorer=new THREE.Group();
+scene.add(explorer);
+
+const skin=mat(0xc78c62);
+const shirt=mat(0xc58a35);
+const pants=mat(0x344d43);
+const boots=mat(0x30271e);
+const backpack=mat(0x68462b);
+
+function part(geo,material,x,y,z){
+const m=new THREE.Mesh(geo,material);
+m.position.set(x,y,z);
+m.castShadow=true;
+explorer.add(m);
+return m;
+}
+
+part(new THREE.CapsuleGeometry(.38,.75,4,8),shirt,0,1.25,0);
+part(new THREE.SphereGeometry(.29,12,10),skin,0,2.05,0);
+part(new THREE.SphereGeometry(.31,12,8),mat(0x443321),0,2.23,-.02);
+// a frente do personagem é +Z (para onde ele anda); a mochila fica nas COSTAS (-Z)
+part(new THREE.BoxGeometry(.57,.66,.3),backpack,0,1.35,-.36);
+part(new THREE.BoxGeometry(.5,.2,.32),mat(0x4a3a24),0,1.75,-.38); // saco de dormir
+part(new THREE.SphereGeometry(.05,6,4),mat(0x1a1a1a),-.1,2.1,.26); // olhos
+part(new THREE.SphereGeometry(.05,6,4),mat(0x1a1a1a),.1,2.1,.26);
+part(new THREE.SphereGeometry(.06,6,4),skin,0,2.02,.29); // nariz
+const chapeu=part(new THREE.CylinderGeometry(.5,.5,.05,16),mat(0xb09060),0,2.33,0);
+part(new THREE.CylinderGeometry(.27,.31,.25,14),mat(0xb09060),0,2.44,0);
+
+const leftLeg=part(
+new THREE.CapsuleGeometry(.14,.58,3,6),pants,-.19,.48,0
+);
+const rightLeg=part(
+new THREE.CapsuleGeometry(.14,.58,3,6),pants,.19,.48,0
+);
+const leftArm=part(
+new THREE.CapsuleGeometry(.12,.55,3,6),shirt,-.48,1.38,0
+);
+const rightArm=part(
+new THREE.CapsuleGeometry(.12,.55,3,6),shirt,.48,1.38,0
+);
+
+part(new THREE.BoxGeometry(.28,.15,.48),boots,-.19,.12,.06);
+part(new THREE.BoxGeometry(.28,.15,.48),boots,.19,.12,.06);
+
+// Descobertas
+const DESCOBERTAS=[
+['🐆','Onça-pintada','O maior felino das Américas. Ela nada muito bem e caça perto dos rios.'],
+['🐬','Boto-cor-de-rosa','Golfinho de água doce! Fica mais rosado quando está agitado.'],
+['🦜','Arara-vermelha','Pode viver mais de 50 anos e anda sempre em casal.'],
+['🪷','Vitória-régia','Suas folhas podem passar de 2 metros e aguentam o peso de uma criança pequena.'],
+['🐸','Sapo-ponta-de-flecha','Pequeno e colorido: as cores avisam que ele é venenoso.'],
+['🦥','Bicho-preguiça','Desce da árvore só uma vez por semana. Algas crescem no seu pelo!'],
+['🐍','Sucuri','Uma das maiores cobras do mundo. Passa boa parte do tempo na água.'],
+['🌰','Castanheira','A castanha-do-pará cresce dentro de um ouriço duro como pedra.'],
+['🐟','Pirarucu','Um dos maiores peixes de água doce: pode ter 3 metros!'],
+['🦋','Borboleta-azul','Suas asas brilham azul por causa da luz, não de tinta.'],
+['🐒','Macaco-prego','Muito esperto: usa pedras como ferramentas para quebrar cocos.'],
+['🌳','Samaúma','A "rainha da floresta" pode passar de 60 metros de altura.']
+];
+const collectibles=[];
+const gemMat=new THREE.MeshStandardMaterial({
+color:0xc8ef79,
+emissive:0x4c8a22,
+emissiveIntensity:1.2
+});
+
+for(let i=0;i<12;i++){
+let x,z;
+do{
+x=(Math.random()-.5)*145;
+z=(Math.random()-.5)*145;
+}while(
+Math.hypot(x,z)<16 ||
+Math.abs(x-Math.sin((z+130)/11*.31)*19)<9
+);
+
+const group=new THREE.Group();
+group.position.set(x,.95,z);
+
+const gem=new THREE.Mesh(
+new THREE.OctahedronGeometry(.48),gemMat
+);
+group.add(gem);
+
+const ring=new THREE.Mesh(
+new THREE.TorusGeometry(.72,.045,6,20),
+new THREE.MeshBasicMaterial({color:0xdfff9a})
+);
+ring.rotation.x=Math.PI/2;
+group.add(ring);
+
+group.userData.info=DESCOBERTAS[i];
+scene.add(group);
+collectibles.push(group);
+}
+
+// Acampamento
+const camp=new THREE.Group();
+camp.position.set(-17,0,-22);
+scene.add(camp);
+
+const tent=new THREE.Mesh(
+new THREE.ConeGeometry(2.4,2.7,4),
+mat(0xb77b42)
+);
+tent.position.y=1.35;
+tent.rotation.y=Math.PI/4;
+camp.add(tent);
+
+const fire=new THREE.Mesh(
+new THREE.SphereGeometry(.45),
+new THREE.MeshBasicMaterial({color:0xffa33a})
+);
+fire.position.set(3,.45,1);
+camp.add(fire);
+
+// Araras voando em círculos
+const araras=[];
+for(let i=0;i<6;i++){
+const b=new THREE.Group();
+const corpo=new THREE.Mesh(new THREE.SphereGeometry(.35,8,6),mat(i%2?0xd62828:0x1d70d6));corpo.scale.set(1,.7,1.6);b.add(corpo);
+const asaE=new THREE.Mesh(new THREE.BoxGeometry(1.2,.05,.45),mat(0xf2c12e));asaE.position.x=-.6;b.add(asaE);
+const asaD=asaE.clone();asaD.position.x=.6;b.add(asaD);
+b.userData={asaE,asaD,raio:12+Math.random()*30,cx:(Math.random()-.5)*120,cz:(Math.random()-.5)*120,alt:12+Math.random()*8,vel:.25+Math.random()*.2,f:Math.random()*6};
+scene.add(b);araras.push(b);
+}
+
+// ===== ANIMAIS =====
+const animais=[];
+const ANIMAIS_INFO={
+ onca:['🐆','Onça-pintada'],capivara:['🦫','Capivara'],macaco:['🐒','Macaco'],boto:['🐬','Boto-cor-de-rosa'],
+ tucano:['🐦','Tucano'],preguica:['🦥','Bicho-preguiça'],jacare:['🐊','Jacaré'],borboleta:['🦋','Borboleta-azul']
+};
+const vistos=new Set();
+const TOTAL_ANIMAIS=Object.keys(ANIMAIS_INFO).length;
+function malha(geo,cor,pai,x,y,z){const m=new THREE.Mesh(geo,typeof cor==='number'?mat(cor):cor);m.position.set(x,y,z);m.castShadow=true;pai.add(m);return m;}
+function pontoLivre(rio=9){let x,z;do{x=(Math.random()-.5)*320;z=(Math.random()-.5)*320;}while(!livre(x,z,rio,20));return [x,z];}
+
+// quadrúpede genérico (onça e capivara)
+function quadrupede(tipo){
+ const g=new THREE.Group();
+ const onca=tipo==='onca';
+ const corpoCor=onca?0xd9a13b:0x8a6340;
+ const L=onca?1.6:1.1;
+ const corpo=malha(new THREE.CapsuleGeometry(onca?.38:.45,L,4,8),corpoCor,g,0,onca?.8:.65,0);corpo.rotation.x=Math.PI/2;
+ const cab=malha(new THREE.SphereGeometry(onca?.36:.4,10,8),corpoCor,g,0,onca?1.05:.8,L/2+.45);
+ if(!onca){cab.scale.set(.9,1,1.3);}
+ malha(new THREE.SphereGeometry(.09,6,4),corpoCor,g,-.2,onca?1.38:1.1,L/2+.4);
+ malha(new THREE.SphereGeometry(.09,6,4),corpoCor,g,.2,onca?1.38:1.1,L/2+.4);
+ malha(new THREE.SphereGeometry(.05,6,4),0x111111,g,-.15,onca?1.12:.9,L/2+.75);
+ malha(new THREE.SphereGeometry(.05,6,4),0x111111,g,.15,onca?1.12:.9,L/2+.75);
+ if(onca){
+  for(let i=0;i<16;i++){const a=Math.random()*Math.PI*2,zz=(Math.random()-.5)*L*1.4;malha(new THREE.SphereGeometry(.07,5,4),0x2a1a0a,g,Math.cos(a)*.36,.8+Math.sin(a)*.36,zz);}
+  const cauda=malha(new THREE.CylinderGeometry(.06,.04,1.1,5),corpoCor,g,0,.85,-L/2-.7);cauda.rotation.x=-1.1;g.userData.cauda=cauda;
+ }
+ const pernas=[];
+ [[-.22,L/2-.1],[.22,L/2-.1],[-.22,-L/2+.1],[.22,-L/2+.1]].forEach(([x,z])=>{
+  const p=new THREE.Group();p.position.set(x,onca?.6:.45,z);g.add(p);
+  malha(new THREE.CylinderGeometry(.09,.08,onca?.6:.45,5),corpoCor,p,0,onca?-.3:-.22,0);pernas.push(p);
+ });
+ g.userData.pernas=pernas;
+ return g;
+}
+function novoAnimalTerrestre(tipo,x,z){
+ const g=quadrupede(tipo);g.position.set(x,0,z);scene.add(g);
+ animais.push({tipo,g,alvo:null,espera:Math.random()*3,vel:tipo==='onca'?3.2:1.8,fase:Math.random()*6,somT:0});
+}
+// 3 onças na mata profunda, 7 capivaras perto do rio
+for(let i=0;i<3;i++){let x,z;do{[x,z]=pontoLivre();}while(Math.hypot(x,z)<70);novoAnimalTerrestre('onca',x,z);}
+for(let i=0;i<7;i++){const zz=-110+Math.random()*220;const lado=Math.random()<.5?-1:1;novoAnimalTerrestre('capivara',riverX(zz)+lado*(8+Math.random()*5),zz);}
+
+// macacos nas copas, pulando de árvore em árvore
+for(let i=0;i<10;i++){
+ const g=new THREE.Group();
+ malha(new THREE.SphereGeometry(.28,8,6),0x5a3b22,g,0,0,0).scale.set(1,1.2,.9);
+ malha(new THREE.SphereGeometry(.2,8,6),0x5a3b22,g,0,.38,.05);
+ malha(new THREE.SphereGeometry(.12,6,4),0xd9b48a,g,0,.36,.18);
+ const cauda=malha(new THREE.TorusGeometry(.25,.035,4,10,Math.PI*1.4),0x5a3b22,g,0,-.1,-.3);cauda.rotation.y=Math.PI/2;
+ const t=trees[Math.floor(Math.random()*na)];
+ g.position.set(t.position.x,(t.copaY||5)-.6,t.position.z);
+ scene.add(g);
+ animais.push({tipo:'macaco',g,arv:t,pulo:null,espera:2+Math.random()*5,somT:0});
+}
+// preguiças penduradas
+for(let i=0;i<5;i++){
+ const g=new THREE.Group();
+ const c=malha(new THREE.CapsuleGeometry(.28,.45,4,8),0x8c7b62,g,0,-.6,0);
+ malha(new THREE.SphereGeometry(.2,8,6),0x8c7b62,g,0,-1.05,.05);
+ malha(new THREE.SphereGeometry(.13,8,6),0xe0d2b5,g,0,-1.07,.18);
+ malha(new THREE.CylinderGeometry(.05,.05,.7,4),0x8c7b62,g,-.18,-.2,0);
+ malha(new THREE.CylinderGeometry(.05,.05,.7,4),0x8c7b62,g,.18,-.2,0);
+ const t=trees[Math.floor(Math.random()*na)];
+ g.position.set(t.position.x+.6,(t.copaY||5)-1,t.position.z);
+ scene.add(g);
+ animais.push({tipo:'preguica',g,fase:Math.random()*6});
+}
+// botos no rio (pulam de vez em quando)
+for(let i=0;i<4;i++){
+ const g=new THREE.Group();
+ const c=malha(new THREE.CapsuleGeometry(.32,1.3,4,8),0xf0a0b8,g,0,0,0);c.rotation.x=Math.PI/2;
+ malha(new THREE.ConeGeometry(.12,.6,6),0xf0a0b8,g,0,0,1.1).rotation.x=Math.PI/2;
+ malha(new THREE.ConeGeometry(.15,.4,4),0xe08aa5,g,0,.35,-.1);
+ malha(new THREE.BoxGeometry(.8,.05,.25),0xe08aa5,g,0,0,-.95);
+ scene.add(g);
+ animais.push({tipo:'boto',g,z:-100+Math.random()*200,dir:Math.random()<.5?1:-1,pulo:0,espera:2+Math.random()*4});
+}
+// jacarés boiando
+for(let i=0;i<3;i++){
+ const g=new THREE.Group();
+ malha(new THREE.BoxGeometry(.6,.25,2.2),0x3e4f2a,g,0,0,0);
+ malha(new THREE.BoxGeometry(.4,.18,.9),0x3e4f2a,g,0,-.02,1.5);
+ malha(new THREE.ConeGeometry(.2,1.2,4),0x3e4f2a,g,0,0,-1.6).rotation.x=-Math.PI/2;
+ malha(new THREE.SphereGeometry(.08,6,4),0xffd23f,g,-.15,.16,1.05);
+ malha(new THREE.SphereGeometry(.08,6,4),0xffd23f,g,.15,.16,1.05);
+ for(let k=0;k<5;k++)malha(new THREE.BoxGeometry(.1,.1,.15),0x2f3d1f,g,0,.16,.8-k*.4);
+ scene.add(g);
+ animais.push({tipo:'jacare',g,z:-90+Math.random()*180,dir:Math.random()<.5?1:-1});
+}
+// tucanos voando
+for(let i=0;i<5;i++){
+ const g=new THREE.Group();
+ malha(new THREE.SphereGeometry(.3,8,6),0x111111,g,0,0,0).scale.set(1,.9,1.5);
+ malha(new THREE.SphereGeometry(.15,6,4),0xfff3c0,g,0,.05,.35);
+ const bico=malha(new THREE.ConeGeometry(.12,.65,6),0xff8a1e,g,0,.05,.75);bico.rotation.x=Math.PI/2;
+ const ae=malha(new THREE.BoxGeometry(1,.04,.4),0x111111,g,-.5,0,0),ad=malha(new THREE.BoxGeometry(1,.04,.4),0x111111,g,.5,0,0);
+ scene.add(g);
+ animais.push({tipo:'tucano',g,ae,ad,raio:10+Math.random()*25,cx:(Math.random()-.5)*200,cz:(Math.random()-.5)*200,alt:9+Math.random()*6,vel:.3+Math.random()*.2,f:Math.random()*6});
+}
+// borboletas azuis
+const asaBorb=new THREE.MeshStandardMaterial({color:0x2e7dff,emissive:0x0a2a88,side:THREE.DoubleSide});
+for(let i=0;i<24;i++){
+ const g=new THREE.Group();
+ const ae=new THREE.Mesh(new THREE.PlaneGeometry(.3,.25),asaBorb);ae.position.x=-.15;
+ const ad=ae.clone();ad.position.x=.15;
+ const pe=new THREE.Group(),pd=new THREE.Group();pe.add(ae);pd.add(ad);g.add(pe,pd);
+ g.rotation.x=-Math.PI/2.5;
+ const [x,z]=pontoLivre(6);
+ g.position.set(x,1,z);scene.add(g);
+ animais.push({tipo:'borboleta',g,pe,pd,cx:x,cz:z,f:Math.random()*6});
+}
+
+function somAnimal(tipo){
+ if(tipo==='onca'){SOM.tom(110,.5,'sawtooth',.05,70);SOM.ruido(.4,.05,500);}
+ else if(tipo==='macaco'){SOM.tom(600,.08,'square',.03,900);SOM.tom(650,.08,'square',.03,950,.12);SOM.tom(700,.1,'square',.03,1000,.24);}
+ else if(tipo==='capivara'){SOM.tom(300,.12,'triangle',.04,250);}
+ else if(tipo==='tucano'){SOM.tom(900,.1,'square',.025,700);SOM.tom(900,.1,'square',.025,700,.15);}
+ else if(tipo==='boto'){SOM.ruido(.4,.08,1400);}
+}
+function verAnimal(a){
+ if(vistos.has(a.tipo))return;
+ vistos.add(a.tipo);
+ const [ic,nome]=ANIMAIS_INFO[a.tipo];
+ document.getElementById('animaisCount').textContent=vistos.size;
+ showMessage(`${ic} Você avistou: ${nome}! (${vistos.size}/${TOTAL_ANIMAIS} animais)`);
+ somAnimal(a.tipo);
+}
+function atualizarAnimais(dt){
+ const P=explorer.position;
+ for(const a of animais){
+  const g=a.g;
+  const d=Math.hypot(g.position.x-P.x,g.position.z-P.z);
+  if(d<(a.tipo==='borboleta'?6:16))verAnimal(a);
+  if(a.tipo==='onca'||a.tipo==='capivara'){
+   a.fase+=dt;
+   // foge se o jogador chega muito perto
+   const medo=a.tipo==='capivara'?7:10;
+   if(d<medo){
+    const dx=g.position.x-P.x,dz=g.position.z-P.z;
+    a.alvo={x:g.position.x+dx/d*15,z:g.position.z+dz/d*15};a.espera=0;a.corre=true;
+    a.somT-=dt;if(a.somT<=0){a.somT=4;somAnimal(a.tipo);}
+   }
+   if(!a.alvo){a.espera-=dt;if(a.espera<=0){a.corre=false;
+     if(a.tipo==='capivara'){const zz=clamp(g.position.z+(Math.random()-.5)*20,-120,120);a.alvo={x:riverX(zz)+(Math.random()<.5?-1:1)*(7+Math.random()*5),z:zz};}
+     else a.alvo={x:clamp(g.position.x+(Math.random()-.5)*40,-180,180),z:clamp(g.position.z+(Math.random()-.5)*40,-180,180)};}}
+   let andando=false;
+   if(a.alvo){
+    const dx=a.alvo.x-g.position.x,dz=a.alvo.z-g.position.z,dd=Math.hypot(dx,dz);
+    if(dd<.5){a.alvo=null;a.espera=2+Math.random()*5;}
+    else{
+     const v=a.vel*(a.corre?2.2:1)*dt;
+     g.position.x+=dx/dd*v;g.position.z+=dz/dd*v;
+     const alvoRot=Math.atan2(dx,dz);
+     let diff=alvoRot-g.rotation.y;diff=Math.atan2(Math.sin(diff),Math.cos(diff));
+     g.rotation.y+=diff*Math.min(1,dt*6);
+     andando=true;
+    }
+   }
+   g.position.x=clamp(g.position.x,-185,185);g.position.z=clamp(g.position.z,-185,185);
+   const vel=andando?(a.corre?16:9):0;
+   g.userData.pernas.forEach((p,i)=>{p.rotation.x=andando?Math.sin(a.fase*vel+(i%2?Math.PI:0)+(i>1?Math.PI/2:0))*.5:p.rotation.x*.85;});
+   if(g.userData.cauda)g.userData.cauda.rotation.z=Math.sin(a.fase*3)*.3;
+  }
+  else if(a.tipo==='macaco'){
+   if(a.pulo){
+    a.pulo.t+=dt/a.pulo.dur;
+    const t=Math.min(1,a.pulo.t);
+    g.position.x=a.pulo.x0+(a.pulo.x1-a.pulo.x0)*t;
+    g.position.z=a.pulo.z0+(a.pulo.z1-a.pulo.z0)*t;
+    g.position.y=a.pulo.y0+(a.pulo.y1-a.pulo.y0)*t+Math.sin(t*Math.PI)*2.5;
+    g.rotation.y=Math.atan2(a.pulo.x1-a.pulo.x0,a.pulo.z1-a.pulo.z0);
+    if(t>=1){a.pulo=null;a.espera=1.5+Math.random()*5;}
+   }else{
+    a.espera-=dt*(d<15?3:1);
+    g.position.y+=Math.sin(performance.now()/300+g.position.x)*.004;
+    if(a.espera<=0){
+     // procura uma árvore vizinha
+     let melhor=null;
+     for(let k=0;k<25;k++){const t=trees[Math.floor(Math.random()*na)];const dd=Math.hypot(t.position.x-a.arv.position.x,t.position.z-a.arv.position.z);if(dd>2&&dd<9){melhor=t;break;}}
+     if(melhor){a.pulo={x0:g.position.x,z0:g.position.z,y0:g.position.y,x1:melhor.position.x,z1:melhor.position.z,y1:(melhor.copaY||5)-.6,t:0,dur:.9};a.arv=melhor;if(d<25)somAnimal('macaco');}
+     else a.espera=2;
+    }
+   }
+  }
+  else if(a.tipo==='preguica'){a.fase+=dt;g.rotation.z=Math.sin(a.fase*.6)*.15;}
+  else if(a.tipo==='boto'){
+   a.z+=a.dir*2*dt;if(a.z>115||a.z<-115)a.dir*=-1;
+   const x=riverX(a.z);
+   if(a.pulo>0){a.pulo-=dt;const t=1-a.pulo/1.2;g.position.set(x,-.3+Math.sin(t*Math.PI)*2,a.z);g.rotation.x=-(t-.5)*2.2*a.dir;
+    if(a.pulo<=0){SOM.ruido(.3,d<30?.06:0,1200);}}
+   else{g.position.set(x,-.6,a.z);a.espera-=dt;if(a.espera<=0){a.pulo=1.2;a.espera=3+Math.random()*5;if(d<35)somAnimal('boto');}}
+   g.rotation.y=a.dir>0?0:Math.PI;
+  }
+  else if(a.tipo==='jacare'){
+   a.z+=a.dir*.6*dt;if(a.z>110||a.z<-110)a.dir*=-1;
+   g.position.set(riverX(a.z)+Math.sin(a.z*.3)*1.5,.02+Math.sin(performance.now()/700)*.03,a.z);
+   g.rotation.y=a.dir>0?0:Math.PI;
+  }
+  else if(a.tipo==='tucano'){
+   a.f+=dt*a.vel;g.position.set(a.cx+Math.cos(a.f)*a.raio,a.alt+Math.sin(a.f*2)*1.5,a.cz+Math.sin(a.f)*a.raio);
+   g.rotation.y=-a.f;const b=Math.sin(performance.now()/60+a.raio)*.6;a.ae.rotation.z=b;a.ad.rotation.z=-b;
+  }
+  else if(a.tipo==='borboleta'){
+   a.f+=dt;g.position.set(a.cx+Math.sin(a.f*.7)*2.5,1+Math.sin(a.f*1.9)*.5,a.cz+Math.cos(a.f*.5)*2.5);
+   const b=Math.sin(a.f*22)*1.1;a.pe.rotation.y=b;a.pd.rotation.y=-b;
+  }
+ }
+}
+
+// Controles
+let found=0;
+let yaw=0,pitch=.22;
+let verticalVelocity=0,onGround=true;
+let elapsed=0;
+let joy={x:0,y:0},running=false;
+const keys={};
+
+const countEl=document.getElementById('count');
+const radarEl=document.getElementById('radar');
+const tempoEl=document.getElementById('tempo');
+let tempoJogo=0,terminou=false,passoT=0,passaroT=3;
+let recorde=0;try{recorde=+(localStorage.getItem('amazonia-recorde')||0);}catch(e){}
+const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+if(recorde)document.getElementById('recordeInicio').textContent='🏆 Seu recorde: '+fmt(recorde);
+function cantoPassaro(){const f=1800+Math.random()*1400;SOM.tom(f,.08,'sine',.035,f*1.3);SOM.tom(f*1.2,.1,'sine',.03,f*.9,.1);}
+const zoneEl=document.getElementById('zone');
+const msg=document.getElementById('message');
+let msgTimer;
+
+function showMessage(t){
+msg.textContent=t;
+msg.classList.add('show');
+clearTimeout(msgTimer);
+msgTimer=setTimeout(()=>msg.classList.remove('show'),2600);
+}
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+addEventListener('keydown',e=>{
+keys[e.code]=true;
+if(e.code==='Space')e.preventDefault();
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
+
+// Olhar com mouse
+let dragging=false,lastX=0,lastY=0;
+renderer.domElement.addEventListener('pointerdown',e=>{
+if((e.pointerType==='mouse'&&e.button===0)||e.pointerType!=='mouse'){
+dragging=true;
+lastX=e.clientX;
+lastY=e.clientY;
+}
+});
+renderer.domElement.addEventListener('pointermove',e=>{
+if(dragging){
+yaw-=(e.clientX-lastX)*.004;
+pitch=clamp(pitch+(e.clientY-lastY)*.003,-.05,.8);
+lastX=e.clientX;
+lastY=e.clientY;
+}
+});
+renderer.domElement.addEventListener('pointerup',()=>dragging=false);
+
+// Joystick
+const stick=document.getElementById('stick');
+const knob=document.getElementById('knob');
+let stickId=null;
+
+stick.addEventListener('pointerdown',e=>{
+stickId=e.pointerId;
+stick.setPointerCapture(stickId);
+updateStick(e);
+});
+
+stick.addEventListener('pointermove',e=>{
+if(e.pointerId===stickId)updateStick(e);
+});
+
+function updateStick(e){
+const r=stick.getBoundingClientRect();
+let dx=e.clientX-(r.left+r.width/2);
+let dy=e.clientY-(r.top+r.height/2);
+const max=39;
+const len=Math.hypot(dx,dy);
+if(len>max){dx=dx/len*max;dy=dy/len*max;}
+joy.x=dx/max;
+joy.y=dy/max;
+knob.style.transform=`translate(${dx}px,${dy}px)`;
+}
+
+function resetStick(){
+stickId=null;
+joy.x=0;
+joy.y=0;
+knob.style.transform='translate(0,0)';
+}
+
+stick.addEventListener('pointerup',resetStick);
+stick.addEventListener('pointercancel',resetStick);
+
+document.getElementById('runBtn').addEventListener(
+'pointerdown',()=>running=true
+);
+document.getElementById('runBtn').addEventListener(
+'pointerup',()=>running=false
+);
+document.getElementById('runBtn').addEventListener(
+'pointercancel',()=>running=false
+);
+
+function jump(){
+if(onGround){
+verticalVelocity=7.1;
+onGround=false;
+SOM.pulo();
+}
+}
+document.getElementById('jumpBtn').addEventListener('pointerdown',jump);
+
+// Câmera
+const cameraTarget=new THREE.Vector3();
+const clock=new THREE.Clock();
+
+function animate(){
+requestAnimationFrame(animate);
+
+const dt=Math.min(clock.getDelta(),.04);
+elapsed+=dt;
+
+if(started){
+
+const forward=
+(keys.KeyW||keys.ArrowUp?1:0)-
+(keys.KeyS||keys.ArrowDown?1:0)-joy.y;
+
+const side=
+(keys.KeyD||keys.ArrowRight?1:0)-
+(keys.KeyA||keys.ArrowLeft?1:0)+joy.x;
+
+const moving=Math.abs(forward)+Math.abs(side)>.08;
+const fast=running||keys.ShiftLeft||keys.ShiftRight;
+const speed=fast?9:5.2;
+
+const moveX=(Math.sin(yaw)*forward-
+Math.cos(yaw)*side)*speed*dt;
+
+const moveZ=(Math.cos(yaw)*forward+
+Math.sin(yaw)*side)*speed*dt;
+
+explorer.position.x+=moveX;
+explorer.position.z+=moveZ;
+
+// não atravessa as árvores
+for(const t of trees){
+const dx=explorer.position.x-t.position.x,dz=explorer.position.z-t.position.z,d=Math.hypot(dx,dz),r=t.userData.r+.35;
+if(d<r&&d>0){explorer.position.x=t.position.x+dx/d*r;explorer.position.z=t.position.z+dz/d*r;}
+}
+if(moving&&onGround){passoT-=dt*(fast?1.6:1);if(passoT<=0){passoT=.38;SOM.passo();}}
+
+explorer.position.x=clamp(explorer.position.x,-195,195);
+explorer.position.z=clamp(explorer.position.z,-195,195);
+
+if(moving){
+explorer.rotation.y=Math.atan2(moveX,moveZ);
+leftLeg.rotation.x=Math.sin(elapsed*10)*(fast?.8:.48);
+rightLeg.rotation.x=-leftLeg.rotation.x;
+leftArm.rotation.x=-leftLeg.rotation.x*.65;
+rightArm.rotation.x=-rightLeg.rotation.x*.65;
+}else{
+leftLeg.rotation.x*=.8;
+rightLeg.rotation.x*=.8;
+leftArm.rotation.x*=.8;
+rightArm.rotation.x*=.8;
+}
+
+if(keys.Space&&onGround)jump();
+
+if(!onGround){
+explorer.position.y+=verticalVelocity*dt;
+verticalVelocity-=18*dt;
+
+if(explorer.position.y<=0){
+explorer.position.y=0;
+verticalVelocity=0;
+onGround=true;
+}
+}
+
+// Câmera seguindo o explorador
+const desired=new THREE.Vector3(
+explorer.position.x-Math.sin(yaw)*9,
+explorer.position.y+4.2+pitch*3,
+explorer.position.z-Math.cos(yaw)*9
+);
+
+camera.position.lerp(desired,1-Math.pow(.001,dt));
+cameraTarget.set(
+explorer.position.x,
+explorer.position.y+1.35,
+explorer.position.z
+);
+camera.lookAt(cameraTarget);
+
+// Coletar descobertas
+collectibles.forEach((c,i)=>{
+c.rotation.y+=dt*1.1;
+c.position.y=.95+Math.sin(elapsed*2+i)*.13;
+
+if(c.visible&&c.position.distanceTo(explorer.position)<2){
+c.visible=false;
+found++;
+countEl.textContent=found;
+const [ic,nome,fato]=c.userData.info;
+showMessage(ic+' '+nome+'! '+fato);
+SOM.item();
+
+if(found===12){
+terminou=true;
+let txt='🏆 Parabéns! Você encontrou as 12 descobertas em '+fmt(tempoJogo)+'!';
+if(!recorde||tempoJogo<recorde){recorde=tempoJogo;try{localStorage.setItem('amazonia-recorde',recorde);}catch(e){}txt+=' Novo recorde!';}
+setTimeout(()=>{showMessage(txt);SOM.vitoria();},2800);
+}
+}
+});
+
+// radar: distância da descoberta mais próxima
+let maisPerto=1e9;
+collectibles.forEach(c=>{if(c.visible)maisPerto=Math.min(maisPerto,c.position.distanceTo(explorer.position));});
+radarEl.textContent=found===12?'completo!':Math.round(maisPerto)+' m';
+if(!terminou){tempoJogo+=dt;tempoEl.textContent=fmt(tempoJogo);}
+passaroT-=dt;if(passaroT<=0){passaroT=2+Math.random()*4;cantoPassaro();}
+
+// Regiões
+const dCamp=explorer.position.distanceTo(camp.position);
+const dRiver=Math.abs(
+explorer.position.x-
+Math.sin((explorer.position.z+130)/11*.31)*19
+);
+
+if(dRiver<8&&Math.random()<dt*3)SOM.ruido(.25,.03*(1-dRiver/8),900);
+zoneEl.textContent=
+dCamp<10?'Acampamento':
+dRiver<11?'Rio Amazonas':
+Math.hypot(explorer.position.x,explorer.position.z)>75?
+'Mata Profunda':'Trilha Verde';
+
+// araras e fogueira
+araras.forEach(b=>{const u=b.userData;u.f+=dt*u.vel;b.position.set(u.cx+Math.cos(u.f)*u.raio,u.alt+Math.sin(u.f*3)*1.2,u.cz+Math.sin(u.f)*u.raio);b.rotation.y=-u.f;const a=Math.sin(elapsed*14+u.raio)*.6;u.asaE.rotation.z=a;u.asaD.rotation.z=-a;});
+fire.scale.setScalar(1+Math.sin(elapsed*13)*.12+Math.random()*.05);
+river.material.color.setHSL(.53,.56,.33+Math.sin(elapsed*1.5)*.02);
+
+atualizarAnimais(dt);
+sun.position.set(explorer.position.x-45,75,explorer.position.z+35);
+sun.target.position.copy(explorer.position);
+}
+
+renderer.render(scene,camera);
+}
+
+// Iniciar
+let started=false;
+document.getElementById('start').addEventListener('click',()=>{
+started=true;
+document.getElementById('loading').style.display='none';
+showMessage('Bem-vindo! Explore a floresta!');
+});
+
+animate();
+
+addEventListener('resize',()=>{
+camera.aspect=innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+});
+</script>
+</body>
+</html>

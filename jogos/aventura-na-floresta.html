@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aventura na Floresta</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#102a43;color:white;font-family:Arial,sans-serif;text-align:center;padding:10px}
+h1{font-size:clamp(20px,4vw,30px)}
+.info{display:flex;justify-content:center;gap:15px;flex-wrap:wrap;margin:10px}
+canvas{width:100%;max-width:900px;display:block;margin:auto;border:3px solid #b8e7ca;border-radius:12px;background:#75d7f4;touch-action:none}
+button{padding:14px 20px;border:0;border-radius:12px;background:#ffd34e;color:#26364a;font-weight:bold;font-size:17px;cursor:pointer;touch-action:manipulation}
+.controls{display:flex;justify-content:space-between;max-width:900px;margin:12px auto;gap:10px}
+.controls button{min-width:65px}
+#message{margin:12px;font-weight:bold;min-height:24px}
+</style>
+<style>/* ajuste Fliperama: canvas cabe na altura da tela */ #game{width:auto;height:auto;max-width:100%;max-height:max(180px,calc(100vh - 350px))}</style>
+</head>
+<body>
+<h1>🌿 Aventura na Floresta</h1>
+<div class="info">
+  <span>🪙 Moedas: <b id="score">0</b></span>
+  <span>❤️ Vidas: <b id="lives">3</b></span>
+  <span>🏁 Fase: <b id="level">1</b></span>
+</div>
+
+<canvas id="game" width="900" height="480"></canvas>
+<div id="message">Colete moedas e alcance a bandeira!</div>
+<button id="start">Jogar / Reiniciar</button>
+
+<div class="controls">
+  <div>
+    <button id="left">◀</button>
+    <button id="right">▶</button>
+  </div>
+  <button id="jump">⬆ PULAR</button>
+</div>
+<p>Computador: setas para andar, espaço para pular e P para pausar.</p>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const scoreUI=document.getElementById("score");
+const livesUI=document.getElementById("lives");
+const levelUI=document.getElementById("level");
+const message=document.getElementById("message");
+
+const W=900,H=480;
+let player,coins,spikes,enemies,goal,holes,birds,parts=[];
+let score=0,lives=3,level=1;
+let camera=0,worldWidth=2800;
+let playing=false,paused=false;
+let left=false,right=false,jump=false;
+let jumpPressed=false,invulnerable=0;
+let lastTime=0,tempo=0;
+
+const mod=(v,m)=>((v%m)+m)%m;   // resto sempre positivo (corrige o cenário sumindo)
+
+function platY(x){return 370-(Math.floor(x/380)%3)*30;}
+function overHole(x0,x1){return holes.some(h=>x1>h.x&&x0<h.x+h.w);}
+
+function newLevel(){
+  worldWidth=2800+(level-1)*400;
+  player={x:50,y:390,w:28,h:38,vx:0,vy:0,ground:false,olha:1,passo:0};
+  coins=[];spikes=[];enemies=[];holes=[];birds=[];parts=[];
+  camera=0;
+
+  // buracos no chão a partir da fase 2 (mais largos a cada fase)
+  if(level>=2){
+    const larg=Math.min(125,70+level*8);
+    for(let x=900;x<worldWidth-400;x+=Math.max(520,820-level*40)){
+      holes.push({x,w:larg});
+    }
+  }
+  for(let x=170;x<worldWidth-100;x+=125){
+    coins.push({x,y:410-Math.sin(x/120)*25,taken:false});
+  }
+  for(let x=420;x<worldWidth-150;x+=500){
+    if(!overHole(x-60,x+100))spikes.push({x,y:438,w:42,h:22});
+  }
+  for(let x=650;x<worldWidth-200;x+=550){
+    if(!overHole(x-110,x+140))enemies.push({x,y:408,w:30,h:30,home:x,dir:1,vel:90+level*12});
+  }
+  // pássaros a partir da fase 3
+  for(let i=0;i<Math.min(3,level-2);i++)birds.push({x:900+i*700,y:300+i*25,base:300+i*25,w:30,h:18,fase:i});
+
+  goal={x:worldWidth-90,y:350,w:10,h:90};
+  updateUI();
+}
+
+function updateUI(){
+  scoreUI.textContent=score;
+  livesUI.textContent=lives;
+  levelUI.textContent=level;
+}
+
+function startGame(){
+  score=0;lives=3;level=1;
+  newLevel();
+  playing=true;paused=false;
+  message.textContent="Colete moedas e alcance a bandeira!";
+  lastTime=performance.now();
+  SOM.clique();
+}
+
+function hit(a,b){
+  return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+}
+function burst(x,y,c,n){for(let i=0;i<n;i++)parts.push({x,y,vx:(Math.random()-.5)*260,vy:-Math.random()*260,v:1,c});}
+
+function loseLife(caiu){
+  if((invulnerable>0&&!caiu)||!playing)return;
+  lives--;
+  updateUI();
+  SOM.dano();
+  if(lives<=0){
+    playing=false;
+    message.textContent="Fim de jogo! Você fez "+score+" pontos. Toque em Jogar para tentar de novo.";
+    setTimeout(SOM.derrota,300);
+  }else{
+    // volta para um lugar seguro (fora de buracos)
+    let x=Math.max(30,player.x-120);
+    while(overHole(x-10,x+player.w+10)&&x>30)x-=40;
+    player.x=x;player.y=330;player.vy=0;
+    invulnerable=1.5;
+  }
+}
+
+function drawBackground(){
+  let sky=ctx.createLinearGradient(0,0,0,H);
+  const noite=Math.min(1,(level-1)*0.15);
+  sky.addColorStop(0,level>=4?"#4f7fbf":"#75d7f4");
+  sky.addColorStop(1,level>=4?"#f7c59f":"#d2f4d0");
+  ctx.fillStyle=sky;
+  ctx.fillRect(0,0,W,H);
+  // sol
+  ctx.fillStyle="rgba(255,240,170,.9)";ctx.beginPath();ctx.arc(760-camera*0.02,80+noite*60,34,0,7);ctx.fill();
+  // nuvens
+  ctx.fillStyle="rgba(255,255,255,.85)";
+  for(let i=0;i<5;i++){const x=mod(i*230-camera*.1+tempo*8,W+200)-100,y=60+(i%3)*28;ctx.beginPath();ctx.arc(x,y,18,0,7);ctx.arc(x+20,y+4,14,0,7);ctx.arc(x-18,y+6,12,0,7);ctx.fill();}
+
+  for(let i=0;i<8;i++){
+    let x=mod(i*150-camera*.25,W+150)-75;
+    ctx.fillStyle="#8bcf9a";
+    ctx.beginPath();
+    ctx.arc(x,430,100,Math.PI,0);
+    ctx.fill();
+  }
+
+  for(let i=0;i<12;i++){
+    let x=mod(i*100-camera*.5,W+100)-50;
+    ctx.fillStyle="#805b3d";
+    ctx.fillRect(x+20,350,12,100);
+    ctx.fillStyle=i%2?"#21865c":"#2b9c62";
+    ctx.beginPath();
+    ctx.arc(x+25,340,34,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function drawWorld(){
+  ctx.save();
+  ctx.translate(-Math.round(camera),0);
+
+  // Chão (com buracos)
+  let x0=0;
+  const segs=[];
+  for(const h of holes){segs.push([x0,h.x]);x0=h.x+h.w;}
+  segs.push([x0,worldWidth]);
+  for(const [a,b] of segs){
+    ctx.fillStyle="#8a5a37";ctx.fillRect(a,450,b-a,40);
+    ctx.fillStyle="#48b85c";ctx.fillRect(a,445,b-a,9);
+    ctx.fillStyle="#6f4628";for(let x=a+10;x<b-10;x+=46)ctx.fillRect(x,462,8,5);
+  }
+  for(const h of holes){ctx.fillStyle="#1d2a1a";ctx.fillRect(h.x,454,h.w,30);}
+
+  // Plataformas
+  for(let x=300;x<worldWidth-250;x+=380){
+    let y=platY(x);
+    ctx.fillStyle="#8a5a37";
+    ctx.fillRect(x,y,130,15);
+    ctx.fillStyle="#48b85c";
+    ctx.fillRect(x,y,130,6);
+  }
+
+  // Espinhos
+  for(const s of spikes){
+    ctx.fillStyle="#657783";
+    for(let x=s.x;x<s.x+s.w;x+=14){
+      ctx.beginPath();
+      ctx.moveTo(x,s.y+s.h);
+      ctx.lineTo(x+7,s.y);
+      ctx.lineTo(x+14,s.y+s.h);
+      ctx.fill();
+    }
+    ctx.fillStyle="#cfd8dc";
+    for(let x=s.x;x<s.x+s.w;x+=14)ctx.fillRect(x+6,s.y+1,2,4);
+  }
+
+  // Moedas (girando)
+  for(const c of coins){
+    if(c.taken)continue;
+    const gira=Math.abs(Math.cos(tempo*4+c.x*0.01));
+    ctx.fillStyle="#ffbf25";
+    ctx.beginPath();
+    ctx.ellipse(c.x,c.y,Math.max(2,9*gira),12,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle="#fff1a6";
+    ctx.lineWidth=3;
+    ctx.stroke();
+  }
+
+  // Inimigos (pulam um pouquinho enquanto andam)
+  for(const e of enemies){
+    if(e.morto)continue;
+    const p=Math.abs(Math.sin(tempo*10+e.home))*3;
+    ctx.fillStyle="#a94f9b";
+    ctx.fillRect(e.x,e.y-p,e.w,e.h);
+    ctx.fillStyle="white";
+    ctx.fillRect(e.x+5,e.y+7-p,6,7);
+    ctx.fillRect(e.x+19,e.y+7-p,6,7);
+    ctx.fillStyle="#26364a";
+    const o=e.dir>0?1:-1;
+    ctx.fillRect(e.x+7+o,e.y+9-p,3,4);
+    ctx.fillRect(e.x+21+o,e.y+9-p,3,4);
+  }
+
+  // Pássaros
+  for(const b of birds){
+    const asa=Math.sin(tempo*14+b.fase)*8;
+    ctx.fillStyle="#3b3b58";
+    ctx.beginPath();ctx.ellipse(b.x+15,b.y+9,15,8,0,0,7);ctx.fill();
+    ctx.beginPath();ctx.moveTo(b.x+8,b.y+6);ctx.lineTo(b.x+16,b.y-asa);ctx.lineTo(b.x+22,b.y+6);ctx.fill();
+    ctx.fillStyle="#ffb02e";ctx.beginPath();ctx.moveTo(b.x,b.y+8);ctx.lineTo(b.x-8,b.y+11);ctx.lineTo(b.x,b.y+13);ctx.fill();
+    ctx.fillStyle="white";ctx.fillRect(b.x+4,b.y+4,4,4);
+  }
+
+  // Bandeira (balançando)
+  ctx.fillStyle="#fff";
+  ctx.fillRect(goal.x,goal.y,6,100);
+  ctx.fillStyle="#ff5d67";
+  const onda=Math.sin(tempo*6)*4;
+  ctx.beginPath();
+  ctx.moveTo(goal.x+6,goal.y);
+  ctx.quadraticCurveTo(goal.x+27,goal.y+5+onda,goal.x+48,goal.y+15);
+  ctx.quadraticCurveTo(goal.x+27,goal.y+25-onda,goal.x+6,goal.y+30);
+  ctx.fill();
+
+  // Partículas
+  for(const p of parts){ctx.globalAlpha=Math.max(0,p.v);ctx.fillStyle=p.c;ctx.fillRect(p.x,p.y,4,4);}
+  ctx.globalAlpha=1;
+
+  // Personagem (pernas andando e olhando para o lado certo)
+  if(invulnerable<=0||Math.floor(performance.now()/100)%2===0){
+    let p=player;
+    const anda=p.ground&&p.vx?Math.sin(p.passo)*4:0;
+    ctx.fillStyle="#263c70";
+    ctx.fillRect(p.x+4,p.y+27,8,11-Math.max(0,anda));
+    ctx.fillRect(p.x+17,p.y+27,8,11-Math.max(0,-anda));
+
+    ctx.fillStyle="#f29a38";
+    ctx.fillRect(p.x+2,p.y+12,24,19);
+
+    ctx.fillStyle="#f6c89a";
+    ctx.beginPath();
+    ctx.arc(p.x+14,p.y+10,12,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle="#543a2e";
+    ctx.beginPath();
+    ctx.arc(p.x+14,p.y+7,11,Math.PI,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle="#24354c";
+    ctx.fillRect(p.olha>0?p.x+17:p.x+8,p.y+9,3,3);
+  }
+
+  ctx.restore();
+}
+
+function update(dt){
+  dt=Math.min(dt,.035);
+  tempo+=dt;
+  for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=600*dt;p.v-=1.6*dt;}
+  parts=parts.filter(p=>p.v>0);
+  if(!playing||paused)return;
+
+  if(invulnerable>0)invulnerable-=dt;
+
+  player.vx=(right?1:0)-(left?1:0);
+  if(player.vx)player.olha=player.vx;
+  player.vx*=230;
+  player.passo+=dt*14;
+  player.vy+=1350*dt;
+
+  if(jumpPressed&&player.ground){
+    player.vy=-560;
+    player.ground=false;
+    SOM.pulo();
+  }
+  jumpPressed=false;
+
+  let oldY=player.y;
+  player.x+=player.vx*dt;
+  player.x=Math.max(0,Math.min(worldWidth-player.w,player.x));
+  player.y+=player.vy*dt;
+  player.ground=false;
+
+  // chão (só onde não tem buraco)
+  if(player.vy>=0&&oldY+player.h<=445&&player.y+player.h>=445&&!overHole(player.x+6,player.x+player.w-6)){
+    player.y=445-player.h;
+    player.vy=0;
+    player.ground=true;
+  }
+
+  // Pouso nas plataformas
+  for(let x=300;x<worldWidth-250;x+=380){
+    let y=platY(x);
+    if(player.vy>=0&&oldY+player.h<=y&&player.y+player.h>=y&&
+       player.x+player.w>x&&player.x<x+130){
+      player.y=y-player.h;
+      player.vy=0;
+      player.ground=true;
+    }
+  }
+
+  if(player.y>H+20){loseLife(true);return;}
+
+  for(const s of spikes){
+    if(hit(player,{x:s.x+4,y:s.y+7,w:s.w-8,h:s.h-7}))loseLife();
+  }
+
+  for(const e of enemies){
+    if(e.morto)continue;
+    e.x+=e.dir*e.vel*dt;
+    if(e.x<e.home-70||e.x>e.home+70)e.dir*=-1;
+
+    if(hit(player,e)){
+      if(player.vy>50&&oldY+player.h<e.y+12){
+        e.morto=true;               // derrotado de verdade (antes ele voltava andando)
+        player.vy=-300;
+        score+=2;
+        updateUI();
+        SOM.golpe();
+        burst(e.x+15,e.y+15,"#a94f9b",12);
+      }else loseLife();
+    }
+  }
+
+  for(const b of birds){
+    b.x-=(120+level*10)*dt;
+    b.y=b.base+Math.sin(tempo*3+b.fase)*30;
+    if(b.x<camera-80)b.x=camera+W+200+Math.random()*300;
+    if(hit(player,{x:b.x+4,y:b.y+2,w:b.w-8,h:b.h-4}))loseLife();
+  }
+
+  for(const c of coins){
+    if(!c.taken&&hit(player,{x:c.x-9,y:c.y-12,w:18,h:24})){
+      c.taken=true;
+      score++;
+      updateUI();
+      SOM.moeda();
+      burst(c.x,c.y,"#ffbf25",6);
+    }
+  }
+
+  camera=Math.max(0,Math.min(worldWidth-W,player.x-W*.35));
+
+  if(hit(player,goal)){
+    level++;
+    SOM.fase();
+    newLevel();
+    message.textContent="Muito bem! Fase "+level+"! "+(level===2?"Cuidado com os buracos!":level===3?"Pássaros à vista!":"Continue!");
+  }
+}
+
+function draw(){
+  drawBackground();
+  drawWorld();
+
+  if(paused){
+    ctx.fillStyle="#102a43cc";
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="white";
+    ctx.font="bold 42px Arial";
+    ctx.textAlign="center";
+    ctx.fillText("PAUSADO",W/2,H/2);
+    ctx.textAlign="left";
+  }
+}
+
+function loop(now){
+  let dt=(now-lastTime)/1000;
+  lastTime=now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+document.getElementById("start").addEventListener("click",e=>{e.currentTarget.blur();startGame();});
+
+function bindHold(id,key){
+  const el=document.getElementById(id);
+  el.addEventListener("pointerdown",e=>{
+    e.preventDefault();
+    if(key==="jump"){
+      if(!jump)jumpPressed=true;
+      jump=true;
+    }else if(key==="left")left=true;
+    else right=true;
+  });
+  for(const ev of ["pointerup","pointercancel","pointerleave"]){
+    el.addEventListener(ev,e=>{
+      e.preventDefault();
+      if(key==="jump")jump=false;
+      else if(key==="left")left=false;
+      else right=false;
+    });
+  }
+}
+bindHold("left","left");
+bindHold("right","right");
+bindHold("jump","jump");
+
+window.addEventListener("keydown",e=>{
+  if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))e.preventDefault();
+  if(e.key==="ArrowLeft"||e.key.toLowerCase()==="a")left=true;
+  if(e.key==="ArrowRight"||e.key.toLowerCase()==="d")right=true;
+  if(e.key===" "||e.key==="ArrowUp"||e.key.toLowerCase()==="w"){
+    if(!jump)jumpPressed=true;
+    jump=true;
+  }
+  if(e.key.toLowerCase()==="p"&&playing){
+    paused=!paused;
+    SOM.clique();
+    message.textContent=paused?"Jogo pausado. Pressione P para continuar.":"Continue a aventura!";
+  }
+});
+
+window.addEventListener("keyup",e=>{
+  if(e.key==="ArrowLeft"||e.key.toLowerCase()==="a")left=false;
+  if(e.key==="ArrowRight"||e.key.toLowerCase()==="d")right=false;
+  if(e.key===" "||e.key==="ArrowUp"||e.key.toLowerCase()==="w")jump=false;
+});
+
+window.addEventListener("blur",()=>{
+  left=false;right=false;jump=false;
+});
+
+newLevel();
+requestAnimationFrame(t=>{lastTime=t;loop(t);});
+</script>
+</body>
+</html>

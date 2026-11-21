@@ -1,0 +1,1959 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mestre das Faltas 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #090d16;
+            font-family: 'Inter', sans-serif;
+        }
+        .font-sport {
+            font-family: 'Oswald', sans-serif;
+        }
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #swipe-overlay {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 18;
+        }
+        .tricolor-bar {
+            background: linear-gradient(90deg, #f59e0b 0%, #f59e0b 33.3%, #ef4444 33.3%, #ef4444 66.6%, #0ea5e9 66.6%, #0ea5e9 100%);
+        }
+        .text-shadow-strong {
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+        }
+        /* Slider de efeito estilizado */
+        input[type="range"].spin-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(15, 23, 42, 0.85);
+            height: 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+        }
+        input[type="range"].spin-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ef4444;
+            border: 3px solid #ffffff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+        }
+        @keyframes popGoal {
+            0% { transform: scale(0.4) rotate(-4deg); opacity: 0; }
+            60% { transform: scale(1.12) rotate(2deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .animate-goal {
+            animation: popGoal 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas 3D Principal -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Canvas 2D Transparente para desenhar o elástico do estilingue -->
+    <canvas id="swipe-overlay"></canvas>
+
+    <!-- HUD In-Game -->
+    <div id="hud" class="hidden fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5">
+        
+        <!-- Topo: Placar, Desafio, Distância, Vento e Botões -->
+        <div class="flex flex-wrap justify-between items-start gap-2 w-full">
+            <!-- Placar Estilo Transmissão TV -->
+            <div class="flex flex-col bg-slate-950/90 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+                <div class="h-1.5 w-full tricolor-bar"></div>
+                <div class="px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-3 sm:gap-4 font-sport">
+                    <div class="flex items-center gap-2">
+                        <span class="bg-red-600 text-white text-xs sm:text-sm font-bold px-2 py-0.5 rounded">CAMISA 01</span>
+                        <span id="hud-score" class="text-xl sm:text-2xl font-bold text-white">0</span>
+                    </div>
+                    <div class="h-6 w-[1px] bg-slate-700"></div>
+                    <div class="text-center">
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider">Fase</div>
+                        <button id="btn-stage-select" title="Escolher Fase" class="pointer-events-auto text-sm sm:text-base font-bold text-amber-400 hover:underline">
+                            <span id="hud-stage">1 / 10</span> ▾
+                        </button>
+                    </div>
+                    <div class="h-6 w-[1px] bg-slate-700"></div>
+                    <div class="text-center">
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider">Bolas</div>
+                        <div id="hud-balls" class="text-sm sm:text-base font-bold text-emerald-400">⚽⚽⚽</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Painel Central: Info da Falta (Distância, Tipo de Barreira e Vento) -->
+            <div class="bg-slate-950/85 border border-slate-700/90 rounded-xl px-3 py-1.5 sm:px-5 sm:py-2 flex items-center gap-3 sm:gap-5 shadow-xl font-sport">
+                <div class="text-center">
+                    <div class="text-[10px] text-slate-400 uppercase">Distância</div>
+                    <div id="hud-distance" class="text-base sm:text-xl font-bold text-white">19m</div>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-700"></div>
+                <div class="text-center max-w-[130px] sm:max-w-none">
+                    <div class="text-[10px] text-slate-400 uppercase">Barreira</div>
+                    <div id="hud-wall-name" class="text-xs sm:text-base font-bold text-red-400 truncate">Clássica (3)</div>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-700"></div>
+                <div class="text-center">
+                    <div class="text-[10px] text-slate-400 uppercase">Vento</div>
+                    <div id="hud-wind" class="text-sm sm:text-lg font-bold text-sky-400">0 km/h</div>
+                </div>
+            </div>
+
+            <!-- Controles Superiores Direitos -->
+            <div class="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
+                <button id="btn-restart-stage" title="Reiniciar Fase" class="bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-600 rounded-xl px-2.5 h-9 sm:h-10 text-xs font-bold uppercase shadow">
+                    🔄 Reiniciar
+                </button>
+                <button id="btn-mute" title="Som" class="bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-600 rounded-xl w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-base shadow">
+                    🔊
+                </button>
+                <button id="btn-menu" class="bg-red-600 hover:bg-red-500 text-white border border-white/40 rounded-xl px-3 h-9 sm:h-10 text-xs font-sport font-bold uppercase tracking-wider shadow">
+                    Menu
+                </button>
+            </div>
+        </div>
+
+        <!-- Banner Central de Golaço / Defesa / Bônus -->
+        <div id="event-banner" class="hidden self-center text-center pointer-events-none my-auto">
+            <div id="event-title" class="font-sport text-4xl sm:text-6xl font-extrabold italic text-yellow-300 text-shadow-strong tracking-wide">
+                GOOOOOOL!
+            </div>
+            <div id="event-badges" class="mt-2 flex flex-wrap justify-center gap-2"></div>
+        </div>
+
+        <!-- Rodapé: Barra de Ajuste Fino de Curva/Efeito e Instrução -->
+        <div class="flex flex-col items-center gap-2 w-full">
+            <!-- Dica contextual -->
+            <div id="kick-instruction" class="bg-slate-950/85 border border-amber-400/50 text-white text-xs sm:text-sm px-4 py-1.5 rounded-full text-center shadow-lg">
+                🏹 <b>Puxe a bola para trás para mirar</b> e solte para chutar!
+            </div>
+
+            <!-- Painel Inferior de Controle de Efeito & Rosca Rápida -->
+            <div id="kick-controls-bar" class="pointer-events-auto bg-slate-950/90 border border-slate-700 rounded-2xl px-3 py-2 sm:px-5 sm:py-2.5 flex flex-col gap-2 shadow-2xl max-w-xl w-full">
+                <!-- Botões rápidos de Rosca -->
+                <div class="grid grid-cols-4 gap-1.5 font-sport text-xs">
+                    <button type="button" data-spin="-0.75" class="quick-spin-btn py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sky-300 font-bold uppercase">
+                        ↺ Curva Esq
+                    </button>
+                    <button type="button" data-spin="0" class="quick-spin-btn py-1.5 rounded-lg bg-amber-500 border border-amber-300 text-slate-950 font-bold uppercase">
+                        ⬆ Reto
+                    </button>
+                    <button type="button" data-spin="0.75" class="quick-spin-btn py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 font-bold uppercase">
+                        Curva Dir ↻
+                    </button>
+                    <button type="button" id="btn-topspin" class="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-300 font-bold uppercase">
+                        🍂 Folha-Seca
+                    </button>
+                </div>
+
+                <!-- Seletor Fino de Curva -->
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] font-bold uppercase text-sky-400">Esq</span>
+                    <input id="spin-slider" type="range" min="-100" max="100" value="0" class="spin-slider flex-1">
+                    <span class="text-[10px] font-bold uppercase text-amber-400">Dir</span>
+                    <span id="spin-label" class="text-[11px] font-bold text-white min-w-[78px] text-right">Reto (0%)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Seletor de Fases -->
+    <div id="stage-picker-modal" class="hidden fixed inset-0 z-45 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="max-w-lg w-full bg-slate-900 border-2 border-amber-400 rounded-3xl overflow-hidden text-white shadow-2xl">
+            <div class="h-2 w-full tricolor-bar"></div>
+            <div class="p-5 sm:p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-sport text-2xl font-bold text-amber-400 uppercase">Selecionar Desafio (1 a 10)</h3>
+                    <button id="btn-close-stage-picker" class="bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg text-sm font-bold">✕</button>
+                </div>
+                <div id="stage-grid" class="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tela Inicial -->
+    <div id="main-menu" class="fixed inset-0 z-40 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="max-w-2xl w-full bg-slate-900 border-2 border-red-600 rounded-3xl overflow-hidden shadow-2xl text-white">
+            <div class="h-3 w-full tricolor-bar"></div>
+            <div class="p-6 sm:p-8 text-center">
+                <div class="inline-flex items-center gap-2 bg-red-600/20 border border-red-500 text-red-400 text-xs font-bold px-3.5 py-1 rounded-full uppercase tracking-widest mb-3">
+                    <span>🧤 Goleiro-Artilheiro • Camisa 01</span>
+                </div>
+                <h1 class="font-sport text-4xl sm:text-6xl font-extrabold italic tracking-tight text-white">
+                    <span class="text-red-500">MESTRE DAS FALTAS</span> 3D
+                </h1>
+                <p class="text-slate-300 text-xs sm:text-sm mt-2 max-w-lg mx-auto">
+                    Assuma a camisa 01 na marca da falta! Supere barreiras criativas, domine o efeito Magnus na curva e acerte a gaveta para fazer história.
+                </p>
+
+                <!-- Como Jogar (Cards Compactos) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 my-6 text-left">
+                    <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5">
+                        <div class="text-xl mb-1">🏹</div>
+                        <div class="font-sport text-sm font-bold text-amber-400 uppercase">1. Estilingue 3D</div>
+                        <p class="text-xs text-slate-400 mt-0.5">Toque ou clique na tela e puxe para trás. Quanto mais puxar, mais forte e alto sai o chute!</p>
+                    </div>
+                    <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5">
+                        <div class="text-xl mb-1">✨</div>
+                        <div class="font-sport text-sm font-bold text-sky-400 uppercase">2. Mira Pontilhada</div>
+                        <p class="text-xs text-slate-400 mt-0.5">Veja a trajetória 3D em tempo real com curva Magnus, folha-seca e vento antes de soltar.</p>
+                    </div>
+                    <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5">
+                        <div class="text-xl mb-1">🧱</div>
+                        <div class="font-sport text-sm font-bold text-red-400 uppercase">3. Barreiras Criativas</div>
+                        <p class="text-xs text-slate-400 mt-0.5">Supere barreiras que pulam, jogador deitado ("crocodilo"), barreira dupla e alvos na gaveta!</p>
+                    </div>
+                </div>
+
+                <!-- Botões de Modo de Jogo -->
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button id="btn-start-campaign" class="flex-1 py-4 rounded-2xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-sport font-bold text-xl sm:text-2xl uppercase tracking-wider border border-white/30 shadow-lg shadow-red-600/30 transition transform active:scale-95">
+                        🏆 Desafio 10 Fases
+                    </button>
+                    <button id="btn-start-endless" class="flex-1 py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-sport font-bold text-xl sm:text-2xl uppercase tracking-wider border border-amber-500/50 shadow-lg transition transform active:scale-95">
+                        ♾️ Modo Livre Infinito
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Fim de Fase / Fim de Jogo -->
+    <div id="end-modal" class="hidden fixed inset-0 z-35 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border-2 border-amber-400 rounded-3xl overflow-hidden text-center text-white shadow-2xl">
+            <div class="h-2.5 w-full tricolor-bar"></div>
+            <div class="p-6 sm:p-8">
+                <div id="modal-icon" class="text-5xl mb-2">⚽</div>
+                <h2 id="modal-title" class="font-sport text-3xl sm:text-4xl font-extrabold text-amber-400 uppercase mb-2">FIM DO DESAFIO!</h2>
+                <p id="modal-subtitle" class="text-slate-300 text-sm mb-5">Confira seu desempenho na cobrança de faltas.</p>
+
+                <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 mb-6 flex justify-around font-sport">
+                    <div>
+                        <div class="text-xs text-slate-400 uppercase">Pontuação</div>
+                        <div id="modal-score" class="text-2xl font-bold text-white">0</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-400 uppercase">Gols Marcados</div>
+                        <div id="modal-goals" class="text-2xl font-bold text-emerald-400">0</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-400 uppercase">Melhor Combo</div>
+                        <div id="modal-combo" class="text-2xl font-bold text-amber-400">0x</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button id="btn-modal-retry" class="flex-1 py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-sport font-bold text-xl uppercase transition">
+                        Jogar Novamente
+                    </button>
+                    <button id="btn-modal-home" class="flex-1 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-sport font-bold text-xl uppercase transition">
+                        Menu Principal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * MESTRE DAS FALTAS 3D
+ * Engine 3D Single-File com Three.js + Estilingue 3D + Física Magnus + Parede Invisível de Arena
+ */
+
+// ==========================================
+// 1. ÁUDIO PROCEDURAL DE ESTÁDIO (WEB AUDIO)
+// ==========================================
+class StadiumAudio {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    toggleMute() {
+        this.muted = !this.muted;
+        document.getElementById('btn-mute').textContent = this.muted ? '🔇' : '🔊';
+    }
+
+    playWhistle() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(2850, now);
+        osc.frequency.exponentialRampToValueAtTime(2650, now + 0.38);
+
+        lfo.frequency.value = 38;
+        lfoGain.gain.value = 95;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.14, now + 0.03);
+        gain.gain.setValueAtTime(0.14, now + 0.30);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.40);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        lfo.start(now);
+        osc.stop(now + 0.42);
+        lfo.stop(now + 0.42);
+    }
+
+    playKick(powerRatio = 0.8) {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(140 + powerRatio * 40, now);
+        osc.frequency.exponentialRampToValueAtTime(36, now + 0.16);
+
+        gain.gain.setValueAtTime(0.45, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.18);
+    }
+
+    playPostTing() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        [1180, 2360, 3540].forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(0.22 / (i + 1), now);
+            gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.75);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.78);
+        });
+    }
+
+    playGoalRoar() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const bufferSize = this.ctx.sampleRate * 1.6;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            const env = Math.sin((i / bufferSize) * Math.PI);
+            data[i] = (Math.random() * 2 - 1) * env;
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(650, now);
+        filter.Q.value = 0.7;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.32, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.55);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+
+        [523.25, 659.25, 783.99, 1046.50].forEach((f, idx) => {
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(f, now + idx * 0.08);
+            g.gain.setValueAtTime(0.08, now + idx * 0.08);
+            g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.35);
+            osc.connect(g);
+            g.connect(this.ctx.destination);
+            osc.start(now + idx * 0.08);
+            osc.stop(now + idx * 0.08 + 0.36);
+        });
+    }
+
+    playMissSigh() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(135, now + 0.55);
+        gain.gain.setValueAtTime(0.11, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
+    }
+}
+
+const audio = new StadiumAudio();
+
+// ==========================================
+// 2. CONFIGURAÇÃO DOS 10 DESAFIOS
+// ==========================================
+const GOAL_Z = -36;
+const GOAL_HALF_W = 3.66;
+const GOAL_H = 2.44;
+const BALL_RADIUS = 0.22;
+
+const STAGES = [
+    {
+        name: 'Clássica (3)',
+        dist: 18,
+        angleX: 0,
+        wind: 0,
+        wallType: 'none_jump',
+        wallCount: 3,
+        keeperSkill: 0.52
+    },
+    {
+        name: 'Barreira Saltando (4)',
+        dist: 20,
+        angleX: 0,
+        wind: 0.8,
+        wallType: 'standard',
+        wallCount: 4,
+        keeperSkill: 0.60
+    },
+    {
+        name: 'Esq + Crocodilo',
+        dist: 22,
+        angleX: -6.2,
+        wind: -1.4,
+        wallType: 'crocodile',
+        wallCount: 4,
+        keeperSkill: 0.66
+    },
+    {
+        name: 'Barreira Dupla (3+2)',
+        dist: 25,
+        angleX: 2.5,
+        wind: 1.6,
+        wallType: 'double',
+        wallCount: 5,
+        keeperSkill: 0.70
+    },
+    {
+        name: 'Dir (5) + Alvo Gaveta',
+        dist: 23,
+        angleX: 6.5,
+        wind: -1.2,
+        wallType: 'targets_single',
+        wallCount: 5,
+        keeperSkill: 0.74
+    },
+    {
+        name: 'Vento Forte Lateral',
+        dist: 24,
+        angleX: -2.0,
+        wind: 3.8,
+        wallType: 'standard',
+        wallCount: 4,
+        keeperSkill: 0.76
+    },
+    {
+        name: 'Longa Distância (28m)',
+        dist: 28,
+        angleX: 3.5,
+        wind: -2.2,
+        wallType: 'standard',
+        wallCount: 5,
+        keeperSkill: 0.80
+    },
+    {
+        name: 'Barreira Móvel',
+        dist: 22,
+        angleX: 0,
+        wind: 2.0,
+        wallType: 'moving',
+        wallCount: 4,
+        keeperSkill: 0.82
+    },
+    {
+        name: 'Muralha Final (6+Croc)',
+        dist: 26,
+        angleX: -5.5,
+        wind: -3.0,
+        wallType: 'crocodile',
+        wallCount: 6,
+        keeperSkill: 0.85
+    },
+    {
+        name: 'Gol 100 Histórico!',
+        dist: 21,
+        angleX: 4.8,
+        wind: 2.4,
+        wallType: 'targets_double',
+        wallCount: 5,
+        keeperSkill: 0.88
+    }
+];
+
+const GAME = {
+    state: 'MENU', // MENU, AIMING, RUNUP, FLIGHT, RESULT, GAMEOVER
+    mode: 'campaign',
+    stageIndex: 0,
+    score: 0,
+    goals: 0,
+    combo: 0,
+    bestCombo: 0,
+    ballsLeft: 3,
+    wind: 0,
+    spinValue: 0,
+    topspin: false,
+    ballStartPos: new THREE.Vector3(),
+    wallGroup: null,
+    wallPlayers: [],
+    wallType: 'standard',
+    wallBaseCenter: new THREE.Vector3(),
+    wallPhase: 0,
+    bonusTargets: [],
+    resultTimer: 0,
+    postShakeTimer: 0,
+    netWaveTimer: 0,
+    crowdJumpTimer: 0
+};
+
+// ==========================================
+// 3. INICIALIZAÇÃO THREE.JS (CENA E RENDERER)
+// ==========================================
+const canvas = document.getElementById('game-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x090d16);
+scene.fog = new THREE.Fog(0x090d16, 45, 160);
+
+const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.2, 250);
+
+const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x14532d, 0.72);
+scene.add(hemiLight);
+
+const spotLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
+spotLight1.position.set(28, 48, 22);
+spotLight1.castShadow = true;
+spotLight1.shadow.mapSize.width = 1024;
+spotLight1.shadow.mapSize.height = 1024;
+const d = 48;
+spotLight1.shadow.camera.left = -d;
+spotLight1.shadow.camera.right = d;
+spotLight1.shadow.camera.top = d;
+spotLight1.shadow.camera.bottom = -d;
+scene.add(spotLight1);
+
+const spotLight2 = new THREE.DirectionalLight(0x93c5fd, 0.45);
+spotLight2.position.set(-28, 35, -45);
+scene.add(spotLight2);
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    resizeSwipeCanvas();
+});
+
+// ==========================================
+// 4. CONSTRUTOR DO ESTÁDIO, GRAMADO E TRAVES
+// ==========================================
+const goalPostGroup = new THREE.Group();
+let goalNetMesh = null;
+const crowdSpectators = [];
+
+function buildStadium() {
+    const stripeCount = 18;
+    const stripeDepth = 5.5;
+    for (let i = 0; i < stripeCount; i++) {
+        const zPos = 25 - i * stripeDepth;
+        const color = i % 2 === 0 ? 0x15803d : 0x16a34a;
+        const strip = new THREE.Mesh(
+            new THREE.BoxGeometry(68, 0.4, stripeDepth),
+            new THREE.MeshLambertMaterial({ color })
+        );
+        strip.position.set(0, -0.2, zPos);
+        strip.receiveShadow = true;
+        scene.add(strip);
+    }
+
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    function addFieldLine(x, z, w, d) {
+        const line = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lineMat);
+        line.rotation.x = -Math.PI / 2;
+        line.position.set(x, 0.015, z);
+        scene.add(line);
+    }
+
+    addFieldLine(0, GOAL_Z, 54, 0.16);
+    addFieldLine(-27, -10, 0.16, 52);
+    addFieldLine(27, -10, 0.16, 52);
+    addFieldLine(0, GOAL_Z + 16.5, 40.3, 0.16);
+    addFieldLine(-20.15, GOAL_Z + 8.25, 0.16, 16.5);
+    addFieldLine(20.15, GOAL_Z + 8.25, 0.16, 16.5);
+    addFieldLine(0, GOAL_Z + 5.5, 18.3, 0.16);
+    addFieldLine(-9.15, GOAL_Z + 2.75, 0.16, 5.5);
+    addFieldLine(9.15, GOAL_Z + 2.75, 0.16, 5.5);
+    addFieldLine(0, GOAL_Z + 11, 0.35, 0.35);
+
+    const postMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+    const postRadius = 0.09;
+
+    const leftPost = new THREE.Mesh(new THREE.CylinderGeometry(postRadius, postRadius, GOAL_H, 12), postMat);
+    leftPost.position.set(-GOAL_HALF_W, GOAL_H / 2, GOAL_Z);
+    leftPost.castShadow = true;
+    goalPostGroup.add(leftPost);
+
+    const rightPost = new THREE.Mesh(new THREE.CylinderGeometry(postRadius, postRadius, GOAL_H, 12), postMat);
+    rightPost.position.set(GOAL_HALF_W, GOAL_H / 2, GOAL_Z);
+    rightPost.castShadow = true;
+    goalPostGroup.add(rightPost);
+
+    const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(postRadius, postRadius, GOAL_HALF_W * 2 + postRadius * 2, 12), postMat);
+    crossbar.rotation.z = Math.PI / 2;
+    crossbar.position.set(0, GOAL_H, GOAL_Z);
+    crossbar.castShadow = true;
+    goalPostGroup.add(crossbar);
+
+    const netGeo = new THREE.BoxGeometry(GOAL_HALF_W * 2, GOAL_H, 1.8, 16, 8, 6);
+    const netMat = new THREE.MeshBasicMaterial({
+        color: 0xe2e8f0,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.42
+    });
+    goalNetMesh = new THREE.Mesh(netGeo, netMat);
+    goalNetMesh.position.set(0, GOAL_H / 2, GOAL_Z - 0.9);
+    goalPostGroup.add(goalNetMesh);
+
+    scene.add(goalPostGroup);
+
+    const adColors = [0xf59e0b, 0xffffff, 0x0ea5e9];
+    for (let i = -5; i <= 5; i++) {
+        const board = new THREE.Mesh(
+            new THREE.BoxGeometry(4.4, 1.1, 0.25),
+            new THREE.MeshLambertMaterial({ color: adColors[Math.abs(i) % 3] })
+        );
+        board.position.set(i * 4.6, 0.55, GOAL_Z - 4.5);
+        scene.add(board);
+    }
+
+    const standMat = new THREE.MeshLambertMaterial({ color: 0x1e293b, flatShading: true });
+    for (let tier = 0; tier < 5; tier++) {
+        const step = new THREE.Mesh(new THREE.BoxGeometry(66, 1.2, 2.2), standMat);
+        step.position.set(0, 0.6 + tier * 1.1, GOAL_Z - 7.5 - tier * 2.1);
+        scene.add(step);
+
+        for (let fx = -28; fx <= 28; fx += 2.2) {
+            if (Math.random() < 0.22) continue;
+            const fanCol = adColors[Math.floor(Math.random() * 3)];
+            const fan = new THREE.Mesh(
+                new THREE.BoxGeometry(0.65, 1.15, 0.55),
+                new THREE.MeshLambertMaterial({ color: fanCol, flatShading: true })
+            );
+            const baseY = 1.65 + tier * 1.1;
+            fan.position.set(fx + (Math.random() - 0.5) * 0.5, baseY, GOAL_Z - 7.5 - tier * 2.1);
+            scene.add(fan);
+            crowdSpectators.push({ mesh: fan, baseY, phase: Math.random() * Math.PI * 2 });
+        }
+    }
+
+    [[-32, GOAL_Z - 6], [32, GOAL_Z - 6]].forEach(([tx, tz]) => {
+        const pole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.35, 0.55, 22, 8),
+            new THREE.MeshLambertMaterial({ color: 0x475569 })
+        );
+        pole.position.set(tx, 11, tz);
+        scene.add(pole);
+
+        const panel = new THREE.Mesh(
+            new THREE.BoxGeometry(4.2, 2.2, 0.6),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a })
+        );
+        panel.position.set(tx, 22, tz + 0.3);
+        panel.lookAt(0, 0, -15);
+        scene.add(panel);
+    });
+}
+
+// ==========================================
+// 5. MODELOS ARTICULADOS: COBRADOR (01) & GOLEIRO RIVAL
+// ==========================================
+function createPlayerModel(options) {
+    const root = new THREE.Group();
+    const shirtMat = new THREE.MeshLambertMaterial({ color: options.shirtColor, flatShading: true });
+    const stripeMat = new THREE.MeshLambertMaterial({ color: options.stripeColor, flatShading: true });
+    const shortMat = new THREE.MeshLambertMaterial({ color: options.shortColor, flatShading: true });
+    const skinMat = new THREE.MeshLambertMaterial({ color: 0xfdba74, flatShading: true });
+    const hairMat = new THREE.MeshLambertMaterial({ color: 0x3f2e21, flatShading: true });
+    const gloveMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.68, 0.32), shirtMat);
+    torso.position.y = 1.08;
+    torso.castShadow = true;
+    root.add(torso);
+
+    const chestBand = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.18, 0.34), stripeMat);
+    chestBand.position.y = 1.14;
+    root.add(chestBand);
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.38, 0.36), skinMat);
+    head.position.y = 1.64;
+    head.castShadow = true;
+    root.add(head);
+
+    const hair = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.38), hairMat);
+    hair.position.y = 1.82;
+    root.add(hair);
+
+    function makeArm(side) {
+        const pivot = new THREE.Group();
+        pivot.position.set(side * 0.38, 1.36, 0);
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.52, 0.18), shirtMat);
+        arm.position.y = -0.24;
+        arm.castShadow = true;
+        pivot.add(arm);
+
+        const glove = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.2), gloveMat);
+        glove.position.y = -0.52;
+        pivot.add(glove);
+        root.add(pivot);
+        return pivot;
+    }
+    const leftArm = makeArm(-1);
+    const rightArm = makeArm(1);
+
+    function makeLeg(side) {
+        const pivot = new THREE.Group();
+        pivot.position.set(side * 0.16, 0.74, 0);
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.72, 0.22), shortMat);
+        leg.position.y = -0.36;
+        leg.castShadow = true;
+        pivot.add(leg);
+        root.add(pivot);
+        return pivot;
+    }
+    const leftLeg = makeLeg(-1);
+    const rightLeg = makeLeg(1);
+
+    return { root, leftArm, rightArm, leftLeg, rightLeg };
+}
+
+const kickerModel = createPlayerModel({
+    shirtColor: 0x1d4ed8,
+    stripeColor: 0xf59e0b,
+    shortColor: 0xf8fafc
+});
+scene.add(kickerModel.root);
+
+const keeperModel = createPlayerModel({
+    shirtColor: 0xeab308,
+    stripeColor: 0x15803d,
+    shortColor: 0x1e293b
+});
+scene.add(keeperModel.root);
+
+// ==========================================
+// 6. BOLA DE FUTEBOL 3D E SOMBRA NO GRAMADO
+// ==========================================
+const ballGroup = new THREE.Group();
+const ballMesh = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(BALL_RADIUS, 1),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true })
+);
+ballMesh.castShadow = true;
+ballGroup.add(ballMesh);
+
+const patchGeo = new THREE.BoxGeometry(0.11, 0.11, BALL_RADIUS * 2.04);
+const patchMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+const patch1 = new THREE.Mesh(patchGeo, patchMat);
+const patch2 = new THREE.Mesh(patchGeo, patchMat);
+patch2.rotation.y = Math.PI / 2;
+const patch3 = new THREE.Mesh(patchGeo, patchMat);
+patch3.rotation.x = Math.PI / 2;
+ballMesh.add(patch1, patch2, patch3);
+scene.add(ballGroup);
+
+const ballShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.28, 16),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false })
+);
+ballShadow.rotation.x = -Math.PI / 2;
+scene.add(ballShadow);
+
+// ==========================================
+// 6B. ESTILINGUE 3D & MIRA PONTILHADA PREDITIVA (ANGRY BIRDS)
+// ==========================================
+const slingshotGroup = new THREE.Group();
+slingshotGroup.visible = false;
+scene.add(slingshotGroup);
+
+const bandGeo = new THREE.CylinderGeometry(0.045, 0.075, 1, 10);
+bandGeo.rotateX(Math.PI / 2);
+bandGeo.translate(0, 0, 0.5);
+const bandMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+const slingshotBand = new THREE.Mesh(bandGeo, bandMat);
+slingshotGroup.add(slingshotBand);
+
+const pullKnob = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+);
+slingshotGroup.add(pullKnob);
+
+const trajectoryDots = [];
+const DOT_COUNT = 32;
+for (let i = 0; i < DOT_COUNT; i++) {
+    const t = i / DOT_COUNT;
+    const radius = 0.13 * (1 - t * 0.55);
+    const dotMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 8, 8),
+        new THREE.MeshBasicMaterial({
+            color: i % 2 === 0 ? 0xffffff : 0xfacc15,
+            transparent: true,
+            opacity: 0.92 - t * 0.55
+        })
+    );
+    dotMesh.visible = false;
+    scene.add(dotMesh);
+    trajectoryDots.push(dotMesh);
+}
+
+// ==========================================
+// 7. ESTADO FÍSICO DA BOLA, GOLEIRO E BARREIRAS CRIATIVAS
+// ==========================================
+const ballPhysics = {
+    pos: new THREE.Vector3(),
+    vel: new THREE.Vector3(),
+    spinY: 0,
+    spinX: 0,
+    active: false,
+    flightTime: 0,
+    hitPost: false,
+    passedUnderWall: false,
+    hitBonusTarget: false
+};
+
+const keeperState = {
+    pos: new THREE.Vector3(0, 0, GOAL_Z + 0.45),
+    vel: new THREE.Vector3(0, 0, 0),
+    diving: false,
+    diveDir: 0,
+    diveHeight: 0,
+    diveProgress: 0,
+    reactionTimer: 0,
+    skill: 0.65,
+    readyStep: 0
+};
+
+const kickerAnim = {
+    startPos: new THREE.Vector3(),
+    progress: 0,
+    pendingKick: null
+};
+
+function createWallDefender(isLyingDown = false, isDummy = false) {
+    const group = new THREE.Group();
+    const jerseyMat = new THREE.MeshLambertMaterial({ color: isDummy ? 0xf59e0b : 0x2563eb, flatShading: true });
+    const shortMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    const skinMat = new THREE.MeshLambertMaterial({ color: 0xfdba74, flatShading: true });
+
+    if (isLyingDown) {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.32, 0.45), jerseyMat);
+        body.position.y = 0.18;
+        body.castShadow = true;
+        group.add(body);
+
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.34), skinMat);
+        head.position.set(0.95, 0.22, 0);
+        group.add(head);
+    } else {
+        const legs = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.75, 0.26), shortMat);
+        legs.position.y = 0.375;
+        legs.castShadow = true;
+        group.add(legs);
+
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.68, 0.30), jerseyMat);
+        torso.position.y = 1.08;
+        torso.castShadow = true;
+        group.add(torso);
+
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.36, 0.34), skinMat);
+        head.position.y = 1.62;
+        head.castShadow = true;
+        group.add(head);
+    }
+
+    return group;
+}
+
+function buildWallForStage(stageCfg) {
+    if (GAME.wallGroup) {
+        scene.remove(GAME.wallGroup);
+    }
+    GAME.wallGroup = new THREE.Group();
+    scene.add(GAME.wallGroup);
+    GAME.wallPlayers = [];
+    GAME.bonusTargets.forEach(t => scene.remove(t.mesh));
+    GAME.bonusTargets = [];
+
+    GAME.wallType = stageCfg.wallType;
+    GAME.wallPhase = 0;
+
+    const goalCenter = new THREE.Vector3(0, 0, GOAL_Z);
+    const toGoal = goalCenter.clone().sub(GAME.ballStartPos).normalize();
+    const rightPerp = new THREE.Vector3(-toGoal.z, 0, toGoal.x);
+
+    const wallCenter = GAME.ballStartPos.clone()
+        .addScaledVector(toGoal, 9.15)
+        .addScaledVector(rightPerp, -Math.sign(GAME.ballStartPos.x) * 0.65);
+
+    GAME.wallBaseCenter.copy(wallCenter);
+    const wallYaw = Math.atan2(-toGoal.x, -toGoal.z);
+
+    const count = stageCfg.wallCount;
+    const spacing = 0.62;
+
+    if (stageCfg.wallType === 'double') {
+        const mainOffsets = [-1.4, -0.78, -0.16];
+        mainOffsets.forEach(off => {
+            const pMesh = createWallDefender(false, false);
+            const pos = wallCenter.clone().addScaledVector(rightPerp, off);
+            pMesh.position.copy(pos);
+            pMesh.rotation.y = wallYaw;
+            GAME.wallGroup.add(pMesh);
+            GAME.wallPlayers.push({
+                mesh: pMesh,
+                basePos: pos.clone(),
+                offsetLateral: off,
+                isLying: false,
+                jumpVel: 0,
+                jumpY: 0,
+                canJump: true
+            });
+        });
+
+        const secondOffsets = [0.95, 1.58];
+        secondOffsets.forEach(off => {
+            const pMesh = createWallDefender(false, false);
+            const pos = wallCenter.clone()
+                .addScaledVector(toGoal, 3.2)
+                .addScaledVector(rightPerp, off);
+            pMesh.position.copy(pos);
+            pMesh.rotation.y = wallYaw;
+            GAME.wallGroup.add(pMesh);
+            GAME.wallPlayers.push({
+                mesh: pMesh,
+                basePos: pos.clone(),
+                offsetLateral: off,
+                isLying: false,
+                jumpVel: 0,
+                jumpY: 0,
+                canJump: true
+            });
+        });
+    } else {
+        const hasTargets = stageCfg.wallType === 'targets_single' || stageCfg.wallType === 'targets_double';
+        const canJumpWall = stageCfg.wallType !== 'none_jump';
+
+        for (let i = 0; i < count; i++) {
+            const off = (i - (count - 1) / 2) * spacing;
+            const pMesh = createWallDefender(false, false);
+            const pos = wallCenter.clone().addScaledVector(rightPerp, off);
+            pMesh.position.copy(pos);
+            pMesh.rotation.y = wallYaw;
+            GAME.wallGroup.add(pMesh);
+            GAME.wallPlayers.push({
+                mesh: pMesh,
+                basePos: pos.clone(),
+                offsetLateral: off,
+                isLying: false,
+                jumpVel: 0,
+                jumpY: 0,
+                canJump: canJumpWall
+            });
+        }
+
+        if (stageCfg.wallType === 'crocodile') {
+            const crocMesh = createWallDefender(true, false);
+            const crocPos = wallCenter.clone().addScaledVector(toGoal, 0.68);
+            crocMesh.position.copy(crocPos);
+            crocMesh.rotation.y = wallYaw;
+            GAME.wallGroup.add(crocMesh);
+            GAME.wallPlayers.push({
+                mesh: crocMesh,
+                basePos: crocPos.clone(),
+                offsetLateral: 0,
+                isLying: true,
+                jumpVel: 0,
+                jumpY: 0,
+                canJump: false
+            });
+        }
+
+        if (hasTargets) {
+            const targetXs = stageCfg.wallType === 'targets_single' ? [-2.95] : [-2.95, 2.95];
+            targetXs.forEach(tx => {
+                const tGeo = new THREE.RingGeometry(0.25, 0.58, 18);
+                const tMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide });
+                const tMesh = new THREE.Mesh(tGeo, tMat);
+                tMesh.position.set(tx, 1.95, GOAL_Z + 0.08);
+                scene.add(tMesh);
+                GAME.bonusTargets.push({ pos: tMesh.position.clone(), mesh: tMesh, hit: false });
+            });
+        }
+    }
+}
+
+// ==========================================
+// 8. PREPARAÇÃO DE CADA COBRANÇA E CÂMERA
+// ==========================================
+const camCurrent = new THREE.Vector3();
+const camLookCurrent = new THREE.Vector3();
+
+function setupFreeKick() {
+    let stageCfg;
+    if (GAME.mode === 'campaign') {
+        stageCfg = STAGES[GAME.stageIndex];
+        document.getElementById('hud-stage').textContent = `${GAME.stageIndex + 1} / ${STAGES.length}`;
+    } else {
+        const types = ['standard', 'crocodile', 'double', 'targets_double', 'moving'];
+        const d = 18 + Math.floor(Math.random() * 16);
+        stageCfg = {
+            name: 'Desafio Livre',
+            dist: d,
+            angleX: (Math.random() - 0.5) * 16,
+            wind: parseFloat(((Math.random() - 0.5) * 7.5).toFixed(1)),
+            wallType: types[Math.floor(Math.random() * types.length)],
+            wallCount: d > 25 ? 5 : 4,
+            keeperSkill: 0.78
+        };
+        document.getElementById('hud-stage').textContent = `INFINITO`;
+    }
+
+    GAME.wind = stageCfg.wind;
+    GAME.ballStartPos.set(stageCfg.angleX, BALL_RADIUS, GOAL_Z + stageCfg.dist);
+
+    ballPhysics.pos.copy(GAME.ballStartPos);
+    ballPhysics.vel.set(0, 0, 0);
+    ballPhysics.spinY = 0;
+    ballPhysics.spinX = 0;
+    ballPhysics.active = false;
+    ballPhysics.flightTime = 0;
+    ballPhysics.hitPost = false;
+    ballPhysics.passedUnderWall = false;
+    ballPhysics.hitBonusTarget = false;
+    ballGroup.position.copy(ballPhysics.pos);
+    ballGroup.rotation.set(0, 0, 0);
+
+    const toGoal = new THREE.Vector3(0, 0, GOAL_Z).sub(GAME.ballStartPos).normalize();
+    const rightPerp = new THREE.Vector3(-toGoal.z, 0, toGoal.x);
+    kickerAnim.startPos.copy(GAME.ballStartPos)
+        .addScaledVector(toGoal, -3.4)
+        .addScaledVector(rightPerp, -1.3);
+    kickerModel.root.position.copy(kickerAnim.startPos);
+    kickerModel.root.lookAt(GAME.ballStartPos.x, 0, GAME.ballStartPos.z);
+    kickerModel.root.rotateY(Math.PI);
+    kickerModel.leftLeg.rotation.x = 0;
+    kickerModel.rightLeg.rotation.x = 0;
+    kickerModel.leftArm.rotation.x = 0;
+    kickerModel.rightArm.rotation.x = 0;
+
+    keeperState.pos.set(Math.sign(stageCfg.angleX) * 0.85, 0, GOAL_Z + 0.45);
+    keeperState.vel.set(0, 0, 0);
+    keeperState.diving = false;
+    keeperState.diveProgress = 0;
+    keeperState.skill = stageCfg.keeperSkill;
+    keeperModel.root.position.copy(keeperState.pos);
+    keeperModel.root.rotation.set(0, Math.PI, 0);
+    keeperModel.leftArm.rotation.set(0, 0, 0.3);
+    keeperModel.rightArm.rotation.set(0, 0, -0.3);
+
+    buildWallForStage(stageCfg);
+
+    document.getElementById('hud-distance').textContent = `${stageCfg.dist}m`;
+    document.getElementById('hud-wall-name').textContent = stageCfg.name;
+    const windDir = stageCfg.wind === 0 ? 'Calmo' : (stageCfg.wind > 0 ? `➔ ${Math.abs(stageCfg.wind * 5).toFixed(0)} km/h` : `⬅ ${Math.abs(stageCfg.wind * 5).toFixed(0)} km/h`);
+    document.getElementById('hud-wind').textContent = windDir;
+    document.getElementById('event-banner').classList.add('hidden');
+    document.getElementById('kick-controls-bar').classList.remove('opacity-40', 'pointer-events-none');
+
+    slingshotState.pullX = 0;
+    slingshotState.pullY = 0.45;
+    slingshotState.isPulling = false;
+
+    GAME.state = 'AIMING';
+    updateSlingshotPreview(false);
+    audio.playWhistle();
+}
+
+// ==========================================
+// 9. MECÂNICA ESTILINGUE ANGRY BIRDS & TRAJETÓRIA PREDITIVA 3D
+// ==========================================
+const swipeCanvas = document.getElementById('swipe-overlay');
+const swipeCtx = swipeCanvas.getContext('2d');
+
+function resizeSwipeCanvas() {
+    swipeCanvas.width = window.innerWidth;
+    swipeCanvas.height = window.innerHeight;
+}
+resizeSwipeCanvas();
+
+const slingshotState = {
+    isPulling: false,
+    startScreenX: 0,
+    startScreenY: 0,
+    currScreenX: 0,
+    currScreenY: 0,
+    pullX: 0,
+    pullY: 0.45,
+    launchVel: new THREE.Vector3()
+};
+
+function getScreenCoords(e) {
+    if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+}
+
+function onSlingshotDown(e) {
+    if (GAME.state !== 'AIMING') return;
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('#stage-picker-modal')) return;
+
+    const pt = getScreenCoords(e);
+    slingshotState.isPulling = true;
+    slingshotState.startScreenX = pt.x;
+    slingshotState.startScreenY = pt.y;
+    slingshotState.currScreenX = pt.x;
+    slingshotState.currScreenY = pt.y;
+    slingshotState.pullX = 0;
+    slingshotState.pullY = 0.22;
+
+    updateSlingshotPreview(true);
+    drawSlingshot2DOverlay();
+}
+
+function onSlingshotMove(e) {
+    if (!slingshotState.isPulling || GAME.state !== 'AIMING') return;
+    const pt = getScreenCoords(e);
+    slingshotState.currScreenX = pt.x;
+    slingshotState.currScreenY = pt.y;
+
+    const maxPullPx = Math.min(window.innerWidth, window.innerHeight) * 0.34;
+    const rawDx = pt.x - slingshotState.startScreenX;
+    const rawDy = pt.y - slingshotState.startScreenY;
+
+    slingshotState.pullX = THREE.MathUtils.clamp(rawDx / maxPullPx, -1.15, 1.15);
+    slingshotState.pullY = THREE.MathUtils.clamp(rawDy / maxPullPx, 0.08, 1.0);
+
+    updateSlingshotPreview(true);
+    drawSlingshot2DOverlay();
+}
+
+function onSlingshotUp() {
+    if (!slingshotState.isPulling || GAME.state !== 'AIMING') return;
+    slingshotState.isPulling = false;
+    swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
+    slingshotGroup.visible = false;
+
+    if (slingshotState.pullY >= 0.18) {
+        const shotParams = computeShotVelocityFromSlingshot();
+        triggerKickerRunup(shotParams);
+    } else {
+        updateSlingshotPreview(false);
+    }
+}
+
+canvas.addEventListener('mousedown', onSlingshotDown);
+window.addEventListener('mousemove', onSlingshotMove);
+window.addEventListener('mouseup', onSlingshotUp);
+
+canvas.addEventListener('touchstart', onSlingshotDown, { passive: false });
+window.addEventListener('touchmove', onSlingshotMove, { passive: false });
+window.addEventListener('touchend', onSlingshotUp);
+
+function drawSlingshot2DOverlay() {
+    swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
+    if (!slingshotState.isPulling) return;
+
+    const sx = slingshotState.startScreenX;
+    const sy = slingshotState.startScreenY;
+    const cx = slingshotState.currScreenX;
+    const cy = slingshotState.currScreenY;
+    const tension = slingshotState.pullY;
+
+    const color = tension < 0.45 ? '#22c55e' : (tension < 0.78 ? '#facc15' : '#ef4444');
+
+    swipeCtx.save();
+    swipeCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    swipeCtx.lineWidth = 2;
+    swipeCtx.beginPath();
+    swipeCtx.arc(sx, sy, 22, 0, Math.PI * 2);
+    swipeCtx.stroke();
+
+    swipeCtx.strokeStyle = color;
+    swipeCtx.lineWidth = 5;
+    swipeCtx.setLineDash([8, 6]);
+    swipeCtx.beginPath();
+    swipeCtx.moveTo(sx, sy);
+    swipeCtx.lineTo(cx, cy);
+    swipeCtx.stroke();
+
+    swipeCtx.setLineDash([]);
+    swipeCtx.fillStyle = color;
+    swipeCtx.font = 'bold 14px Oswald, sans-serif';
+    swipeCtx.fillText(`FORÇA ${Math.round(tension * 100)}%`, cx + 16, cy - 10);
+    swipeCtx.restore();
+}
+
+function computeShotVelocityFromSlingshot() {
+    const dist = Math.abs(GOAL_Z - GAME.ballStartPos.z);
+    const tension = slingshotState.pullY;
+
+    const toGoal = new THREE.Vector3(0, 0, GOAL_Z).sub(GAME.ballStartPos).normalize();
+    const rightPerp = new THREE.Vector3(-toGoal.z, 0, toGoal.x);
+
+    const aimLateral = -slingshotState.pullX * 0.44;
+    const aimDir = toGoal.clone().addScaledVector(rightPerp, aimLateral).normalize();
+
+    const speed = 17.5 + tension * 15.5 + (dist - 18) * 0.24;
+    const launchAngleY = 0.14 + tension * 0.28 + (GAME.topspin ? 0.10 : 0);
+
+    const vel = new THREE.Vector3(
+        aimDir.x * speed,
+        speed * launchAngleY,
+        aimDir.z * speed
+    );
+
+    return {
+        vel,
+        speed,
+        spinY: GAME.spinValue,
+        spinX: GAME.topspin ? 1.0 : 0.15
+    };
+}
+
+function updateSlingshotPreview(showBand = false) {
+    if (GAME.state !== 'AIMING') {
+        slingshotGroup.visible = false;
+        trajectoryDots.forEach(d => d.visible = false);
+        return;
+    }
+
+    const params = computeShotVelocityFromSlingshot();
+    const tension = slingshotState.pullY;
+
+    if (showBand) {
+        slingshotGroup.visible = true;
+        slingshotGroup.position.copy(GAME.ballStartPos);
+
+        const pullBackDir = params.vel.clone().setY(0).normalize().negate();
+        const pullLen = 0.8 + tension * 2.6;
+        const targetBack = GAME.ballStartPos.clone().addScaledVector(pullBackDir, pullLen);
+        targetBack.y = BALL_RADIUS + 0.05;
+
+        slingshotGroup.lookAt(targetBack);
+        slingshotBand.scale.set(1, 1, pullLen);
+        pullKnob.position.set(0, 0, pullLen);
+
+        const hexColor = tension < 0.45 ? 0x22c55e : (tension < 0.78 ? 0xfacc15 : 0xef4444);
+        bandMat.color.setHex(hexColor);
+        pullKnob.material.color.setHex(hexColor);
+    } else {
+        slingshotGroup.visible = false;
+    }
+
+    const simPos = GAME.ballStartPos.clone();
+    const simVel = params.vel.clone();
+    const simDt = 0.042;
+    const topspinDrop = params.spinX * 9.5;
+    const magnusForceX = params.spinY * 14.5;
+    const windForceX = GAME.wind * 1.15;
+
+    for (let i = 0; i < DOT_COUNT; i++) {
+        simVel.y -= (9.81 + topspinDrop) * simDt;
+        simVel.x += (magnusForceX + windForceX) * simDt;
+        simVel.multiplyScalar(Math.max(0, 1 - 0.14 * simDt));
+        simPos.addScaledVector(simVel, simDt);
+
+        if (simPos.y < BALL_RADIUS) simPos.y = BALL_RADIUS;
+
+        const dot = trajectoryDots[i];
+        dot.position.copy(simPos);
+        dot.visible = simPos.z >= GOAL_Z - 0.5;
+    }
+}
+
+// ==========================================
+// 10. ANIMAÇÃO DO COBRADOR E DISPARO DA BOLA
+// ==========================================
+function triggerKickerRunup(shotParams) {
+    GAME.state = 'RUNUP';
+    slingshotGroup.visible = false;
+    trajectoryDots.forEach(d => d.visible = false);
+    kickerAnim.progress = 0;
+    kickerAnim.pendingKick = shotParams;
+    document.getElementById('kick-controls-bar').classList.add('opacity-40', 'pointer-events-none');
+}
+
+function updateKickerRunup(dt) {
+    kickerAnim.progress += dt * 2.3;
+    const t = Math.min(1, kickerAnim.progress);
+
+    const kickSpot = GAME.ballStartPos.clone().add(new THREE.Vector3(-0.35, 0, 0.45));
+    kickerModel.root.position.lerpVectors(kickerAnim.startPos, kickSpot, t);
+
+    const stride = Math.sin(t * Math.PI * 4) * 0.65;
+    kickerModel.leftLeg.rotation.x = stride;
+    kickerModel.rightLeg.rotation.x = -stride;
+    kickerModel.leftArm.rotation.x = -stride * 0.7;
+    kickerModel.rightArm.rotation.x = stride * 0.7;
+
+    if (t >= 1) {
+        kickerModel.rightLeg.rotation.x = -0.95;
+        kickerModel.leftArm.rotation.x = -0.85;
+        launchBall(kickerAnim.pendingKick);
+    }
+}
+
+function launchBall(params) {
+    GAME.state = 'FLIGHT';
+    ballPhysics.active = true;
+    ballPhysics.flightTime = 0;
+    ballPhysics.spinY = params.spinY;
+    ballPhysics.spinX = params.spinX;
+    ballPhysics.vel.copy(params.vel);
+
+    audio.playKick(params.speed / 34);
+
+    GAME.wallPlayers.forEach(wp => {
+        if (wp.canJump) {
+            wp.jumpVel = 3.8 + Math.random() * 0.6;
+        }
+    });
+
+    keeperState.reactionTimer = Math.max(0.08, 0.28 - keeperState.skill * 0.18);
+}
+
+// ==========================================
+// 11. FÍSICA MAGNUS DA BOLA, PAREDE INVISÍVEL E IA DO GOLEIRO
+// ==========================================
+function updateBallAndMatchPhysics(dt) {
+    if (!ballPhysics.active) return;
+
+    ballPhysics.flightTime += dt;
+
+    // 1. Gravidade + Efeito Topspin ("Folha-Seca")
+    const topspinDrop = ballPhysics.spinX * 9.5;
+    ballPhysics.vel.y -= (9.81 + topspinDrop) * dt;
+
+    // 2. Efeito Magnus Lateral (Curva) + Vento do Estádio
+    const magnusForceX = ballPhysics.spinY * 14.5;
+    const windForceX = GAME.wind * 1.15;
+    ballPhysics.vel.x += (magnusForceX + windForceX) * dt;
+
+    // 3. Arrasto aerodinâmico sutil
+    ballPhysics.vel.multiplyScalar(Math.max(0, 1 - 0.14 * dt));
+
+    // Atualiza posição da bola
+    const prevPos = ballPhysics.pos.clone();
+    ballPhysics.pos.addScaledVector(ballPhysics.vel, dt);
+    ballGroup.position.copy(ballPhysics.pos);
+
+    ballMesh.rotation.y -= ballPhysics.spinY * 14 * dt;
+    ballMesh.rotation.x -= (10 + ballPhysics.spinX * 12) * dt;
+
+    // 3B. Parede Invisível ao redor de todo o cenário (impede a bola de sair do mapa)
+    const ARENA_MIN_X = -25.5;
+    const ARENA_MAX_X = 25.5;
+    const ARENA_MIN_Z = GOAL_Z - 4.2; // Fundo do estádio à frente das placas de publicidade
+    const ARENA_MAX_Z = 22.0;         // Limite atrás do cobrador
+    const ARENA_MAX_Y = 18.0;         // Teto invisível
+
+    if (ballPhysics.pos.x < ARENA_MIN_X) {
+        ballPhysics.pos.x = ARENA_MIN_X;
+        ballPhysics.vel.x = Math.abs(ballPhysics.vel.x) * 0.55;
+    } else if (ballPhysics.pos.x > ARENA_MAX_X) {
+        ballPhysics.pos.x = ARENA_MAX_X;
+        ballPhysics.vel.x = -Math.abs(ballPhysics.vel.x) * 0.55;
+    }
+
+    if (ballPhysics.pos.z < ARENA_MIN_Z) {
+        ballPhysics.pos.z = ARENA_MIN_Z;
+        ballPhysics.vel.z = Math.abs(ballPhysics.vel.z) * 0.45;
+        if (GAME.state === 'FLIGHT') {
+            finishAttempt(false, ballPhysics.hitPost ? 'NA TRAVE E PRA FORA!' : 'PRA FORA!');
+            return;
+        }
+    } else if (ballPhysics.pos.z > ARENA_MAX_Z) {
+        ballPhysics.pos.z = ARENA_MAX_Z;
+        ballPhysics.vel.z = -Math.abs(ballPhysics.vel.z) * 0.45;
+    }
+
+    if (ballPhysics.pos.y > ARENA_MAX_Y) {
+        ballPhysics.pos.y = ARENA_MAX_Y;
+        ballPhysics.vel.y = -Math.abs(ballPhysics.vel.y) * 0.45;
+    }
+
+    // 4. Quique no gramado
+    if (ballPhysics.pos.y <= BALL_RADIUS) {
+        ballPhysics.pos.y = BALL_RADIUS;
+        if (ballPhysics.vel.y < -1.5) {
+            ballPhysics.vel.y = -ballPhysics.vel.y * 0.62;
+            ballPhysics.vel.x *= 0.88;
+            ballPhysics.vel.z *= 0.88;
+        } else {
+            ballPhysics.vel.y = 0;
+        }
+    }
+
+    // 5. Colisão com os Jogadores da Barreira
+    for (let wp of GAME.wallPlayers) {
+        const wPos = wp.mesh.position;
+        const hitRadius = wp.isLying ? 0.35 : 0.42;
+        const minY = 0;
+        const maxY = wp.isLying ? 0.45 : (1.82 + wp.jumpY);
+
+        const horizDist = Math.hypot(ballPhysics.pos.x - wPos.x, ballPhysics.pos.z - wPos.z);
+        if (horizDist < BALL_RADIUS + hitRadius && ballPhysics.pos.y >= minY && ballPhysics.pos.y <= maxY) {
+            ballPhysics.vel.z = Math.abs(ballPhysics.vel.z) * 0.45;
+            ballPhysics.vel.x += (ballPhysics.pos.x - wPos.x) * 8;
+            ballPhysics.vel.y = Math.max(2.5, ballPhysics.vel.y * 0.5);
+            audio.playKick(0.4);
+            finishAttempt(false, 'BLOQUEADA PELA BARREIRA!');
+            return;
+        }
+    }
+
+    if (Math.abs(ballPhysics.pos.z - GAME.wallBaseCenter.z) < 0.5 && ballPhysics.pos.y < 0.42) {
+        const jumpedHigh = GAME.wallPlayers.some(wp => wp.jumpY > 0.32);
+        if (jumpedHigh) ballPhysics.passedUnderWall = true;
+    }
+
+    // 6. Verifica Alvos Bônus nas Gavetas
+    for (let tgt of GAME.bonusTargets) {
+        if (!tgt.hit && ballPhysics.pos.distanceTo(tgt.pos) < 0.85) {
+            tgt.hit = true;
+            tgt.mesh.visible = false;
+            ballPhysics.hitBonusTarget = true;
+        }
+    }
+
+    // 7. Colisão com as Traves e Travessão (Z ≈ GOAL_Z)
+    if (Math.abs(ballPhysics.pos.z - GOAL_Z) < BALL_RADIUS + 0.12) {
+        const distLeftPost = Math.hypot(ballPhysics.pos.x - (-GOAL_HALF_W), ballPhysics.pos.z - GOAL_Z);
+        const distRightPost = Math.hypot(ballPhysics.pos.x - GOAL_HALF_W, ballPhysics.pos.z - GOAL_Z);
+
+        if ((distLeftPost < BALL_RADIUS + 0.11 || distRightPost < BALL_RADIUS + 0.11) && ballPhysics.pos.y <= GOAL_H + 0.1) {
+            ballPhysics.hitPost = true;
+            GAME.postShakeTimer = 0.35;
+            audio.playPostTing();
+
+            const postX = distLeftPost < distRightPost ? -GOAL_HALF_W : GOAL_HALF_W;
+            const inwardDir = -Math.sign(postX);
+            if (Math.sign(ballPhysics.pos.x - postX) === inwardDir) {
+                ballPhysics.vel.x = inwardDir * 3.5;
+                ballPhysics.vel.z *= 0.7;
+            } else {
+                ballPhysics.vel.x = -ballPhysics.vel.x * 0.65;
+                ballPhysics.vel.z = Math.abs(ballPhysics.vel.z) * 0.55;
+            }
+        }
+
+        const distCrossbar = Math.hypot(ballPhysics.pos.y - GOAL_H, ballPhysics.pos.z - GOAL_Z);
+        if (distCrossbar < BALL_RADIUS + 0.11 && Math.abs(ballPhysics.pos.x) <= GOAL_HALF_W + 0.12) {
+            ballPhysics.hitPost = true;
+            GAME.postShakeTimer = 0.35;
+            audio.playPostTing();
+
+            if (ballPhysics.pos.y < GOAL_H) {
+                ballPhysics.vel.y = -Math.abs(ballPhysics.vel.y) * 0.65;
+                ballPhysics.vel.z *= 0.75;
+            } else {
+                ballPhysics.vel.y = Math.abs(ballPhysics.vel.y) * 0.65;
+                ballPhysics.vel.z = Math.abs(ballPhysics.vel.z) * 0.55;
+            }
+        }
+    }
+
+    // 8. Defesa do Goleiro Adversário
+    if (Math.abs(ballPhysics.pos.z - keeperState.pos.z) < 0.55) {
+        const reachX = keeperState.diving ? 1.15 : 0.55;
+        const reachY = keeperState.diving ? 1.35 : 1.95;
+        if (Math.abs(ballPhysics.pos.x - keeperState.pos.x) < reachX &&
+            ballPhysics.pos.y >= 0 && ballPhysics.pos.y <= reachY) {
+            ballPhysics.vel.z = Math.abs(ballPhysics.vel.z) * 0.55;
+            ballPhysics.vel.x += Math.sign(ballPhysics.pos.x - keeperState.pos.x) * 7;
+            ballPhysics.vel.y = 4.5;
+            audio.playKick(0.6);
+            finishAttempt(false, 'DEFENDEU O GOLEIRO!');
+            return;
+        }
+    }
+
+    // 9. Cruzou a Linha do Gol!
+    if (prevPos.z >= GOAL_Z && ballPhysics.pos.z < GOAL_Z) {
+        if (Math.abs(ballPhysics.pos.x) < GOAL_HALF_W && ballPhysics.pos.y < GOAL_H) {
+            GAME.netWaveTimer = 0.8;
+            GAME.crowdJumpTimer = 2.4;
+            ballPhysics.vel.multiplyScalar(0.35);
+            handleGoalScored();
+            return;
+        } else {
+            finishAttempt(false, ballPhysics.hitPost ? 'NA TRAVE E PRA FORA!' : 'PRA FORA!');
+            return;
+        }
+    }
+
+    // 10. Encerra a jogada com segurança se rebater na trave de volta ao campo, parar ou atingir tempo limite
+    if (ballPhysics.hitPost && ballPhysics.vel.z > 1.5 && ballPhysics.pos.z > GOAL_Z + 2.2) {
+        finishAttempt(false, 'NA TRAVE! QUASE!');
+        return;
+    }
+
+    if ((ballPhysics.vel.length() < 1.3 && ballPhysics.flightTime > 0.6) || ballPhysics.flightTime > 4.5) {
+        finishAttempt(false, ballPhysics.hitPost ? 'NA TRAVE!' : 'CHUTE FRACO!');
+    }
+}
+
+function updateGoalkeeperAI(dt) {
+    if (GAME.state === 'AIMING') {
+        keeperState.readyStep += dt * 5;
+        keeperModel.root.position.x = keeperState.pos.x + Math.sin(keeperState.readyStep) * 0.18;
+        return;
+    }
+
+    if (GAME.state !== 'FLIGHT') return;
+
+    if (keeperState.reactionTimer > 0) {
+        keeperState.reactionTimer -= dt;
+        return;
+    }
+
+    const timeToGoal = Math.max(0.05, (ballPhysics.pos.z - GOAL_Z) / Math.max(4, Math.abs(ballPhysics.vel.z)));
+    const predictedX = ballPhysics.pos.x + ballPhysics.vel.x * timeToGoal + 0.5 * (ballPhysics.spinY * 14.5) * timeToGoal * timeToGoal;
+    const clampedTargetX = THREE.MathUtils.clamp(predictedX, -GOAL_HALF_W + 0.4, GOAL_HALF_W - 0.4);
+
+    if (!keeperState.diving && timeToGoal < 0.55) {
+        keeperState.diving = true;
+        keeperState.diveDir = Math.sign(clampedTargetX - keeperState.pos.x) || 1;
+        keeperState.diveHeight = Math.min(1.6, Math.max(0.2, ballPhysics.pos.y));
+    }
+
+    const moveSpeed = (6.2 + keeperState.skill * 3.8);
+    const diffX = clampedTargetX - keeperState.pos.x;
+    keeperState.pos.x += THREE.MathUtils.clamp(diffX, -moveSpeed * dt, moveSpeed * dt);
+
+    if (keeperState.diving) {
+        keeperState.diveProgress = Math.min(1, keeperState.diveProgress + dt * 3.5);
+        keeperModel.root.rotation.z = -keeperState.diveDir * keeperState.diveProgress * 1.25;
+        keeperModel.root.position.y = Math.sin(keeperState.diveProgress * Math.PI) * keeperState.diveHeight * 0.65;
+        keeperModel.leftArm.rotation.z = 2.6;
+        keeperModel.rightArm.rotation.z = -2.6;
+    }
+
+    keeperModel.root.position.x = keeperState.pos.x;
+}
+
+function updateWallAnimation(dt, elapsed) {
+    if (!GAME.wallPlayers.length) return;
+
+    if (GAME.wallType === 'moving' && GAME.state === 'AIMING') {
+        GAME.wallPhase += dt * 2.1;
+        const shiftX = Math.sin(GAME.wallPhase) * 2.2;
+        GAME.wallPlayers.forEach(wp => {
+            wp.mesh.position.x = wp.basePos.x + shiftX;
+        });
+    }
+
+    GAME.wallPlayers.forEach(wp => {
+        if (wp.jumpY > 0 || wp.jumpVel > 0) {
+            wp.jumpY += wp.jumpVel * dt;
+            wp.jumpVel -= 13.5 * dt;
+            if (wp.jumpY <= 0) {
+                wp.jumpY = 0;
+                wp.jumpVel = 0;
+            }
+            wp.mesh.position.y = wp.basePos.y + wp.jumpY;
+        }
+    });
+}
+
+// ==========================================
+// 12. PONTUAÇÃO, BÔNUS ESPECIAIS E PROGRESSÃO
+// ==========================================
+function handleGoalScored() {
+    GAME.goals++;
+    GAME.combo++;
+    if (GAME.combo > GAME.bestCombo) GAME.bestCombo = GAME.combo;
+
+    let points = 100;
+    const badges = [];
+
+    if (Math.abs(ballPhysics.pos.x) > 2.45 && ballPhysics.pos.y > 1.55) {
+        points += 150;
+        badges.push('🎯 GOLAÇO NA GAVETA! +150');
+    }
+    if (ballPhysics.hitPost) {
+        points += 100;
+        badges.push('🔔 NA TRAVE E ENTROU! +100');
+    }
+    if (ballPhysics.passedUnderWall) {
+        points += 120;
+        badges.push('🐍 DEBAIXO DA BARREIRA! +120');
+    }
+    if (Math.abs(ballPhysics.spinY) > 0.65) {
+        points += 80;
+        badges.push('🌀 CURVA IMPOSSÍVEL! +80');
+    }
+    if (ballPhysics.hitBonusTarget) {
+        points += 200;
+        badges.push('⭐ ALVO BÔNUS! +200');
+    }
+    if (GAME.combo > 1) {
+        points = Math.round(points * (1 + (GAME.combo - 1) * 0.25));
+        badges.push(`🔥 COMBO ${GAME.combo}x!`);
+    }
+
+    GAME.score += points;
+    audio.playGoalRoar();
+    finishAttempt(true, `GOOOOOOL! +${points}`, badges);
+}
+
+function finishAttempt(isGoal, titleText, badges = []) {
+    if (GAME.state === 'RESULT') return;
+    GAME.state = 'RESULT';
+    GAME.resultTimer = 2.3;
+
+    if (!isGoal) {
+        GAME.combo = 0;
+        GAME.ballsLeft--;
+        audio.playMissSigh();
+    } else if (GAME.mode === 'campaign') {
+        GAME.stageIndex++;
+    }
+
+    updateScoreboardHUD();
+
+    const banner = document.getElementById('event-banner');
+    const titleEl = document.getElementById('event-title');
+    const badgesEl = document.getElementById('event-badges');
+
+    titleEl.textContent = titleText;
+    titleEl.className = `font-sport text-4xl sm:text-6xl font-extrabold italic text-shadow-strong tracking-wide animate-goal ${isGoal ? 'text-yellow-300' : 'text-red-400'}`;
+
+    badgesEl.innerHTML = '';
+    badges.forEach(b => {
+        const span = document.createElement('span');
+        span.className = 'bg-slate-950/90 border border-amber-400 text-amber-300 font-sport text-xs sm:text-sm font-bold px-3 py-1 rounded-full shadow';
+        span.textContent = b;
+        badgesEl.appendChild(span);
+    });
+
+    banner.classList.remove('hidden');
+}
+
+function updateScoreboardHUD() {
+    document.getElementById('hud-score').textContent = GAME.score;
+    const ballsStr = GAME.ballsLeft > 0 ? '⚽'.repeat(GAME.ballsLeft) : '❌';
+    document.getElementById('hud-balls').textContent = ballsStr;
+}
+
+function showEndModal(completedCampaign = false) {
+    GAME.state = 'GAMEOVER';
+    document.getElementById('event-banner').classList.add('hidden');
+    document.getElementById('modal-icon').textContent = completedCampaign ? '🏆' : '🧤';
+    document.getElementById('modal-title').textContent = completedCampaign ? 'CAMPEÃO! 100% DAS FALTAS!' : 'FIM DAS COBRANÇAS';
+    document.getElementById('modal-subtitle').textContent = completedCampaign
+        ? 'Você completou todos os 10 desafios de falta como um verdadeiro goleiro-artilheiro!'
+        : 'Suas bolas acabaram. Treine sua curva e tente bater seu recorde!';
+    document.getElementById('modal-score').textContent = GAME.score;
+    document.getElementById('modal-goals').textContent = GAME.goals;
+    document.getElementById('modal-combo').textContent = `${GAME.bestCombo}x`;
+    document.getElementById('end-modal').classList.remove('hidden');
+}
+
+// ==========================================
+// 13. CONTROLES DE INTERFACE (SLIDER, BOTÕES E MENUS)
+// ==========================================
+const spinSlider = document.getElementById('spin-slider');
+function updateSpinLabel(val) {
+    GAME.spinValue = val;
+    const lbl = document.getElementById('spin-label');
+    if (Math.abs(val) < 0.08) lbl.textContent = 'Reto (0%)';
+    else if (val < 0) lbl.textContent = `Esq (${Math.round(Math.abs(val) * 100)}%)`;
+    else lbl.textContent = `Dir (${Math.round(val * 100)}%)`;
+
+    document.querySelectorAll('.quick-spin-btn').forEach(btn => {
+        const bVal = parseFloat(btn.dataset.spin);
+        const isActive = Math.abs(bVal - val) < 0.15;
+        btn.classList.toggle('bg-amber-500', isActive);
+        btn.classList.toggle('text-slate-950', isActive);
+        btn.classList.toggle('border-amber-300', isActive);
+        btn.classList.toggle('bg-slate-800', !isActive);
+    });
+
+    updateSlingshotPreview(slingshotState.isPulling);
+}
+
+spinSlider.addEventListener('input', (e) => {
+    updateSpinLabel(parseInt(e.target.value, 10) / 100);
+});
+
+document.querySelectorAll('.quick-spin-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const val = parseFloat(btn.dataset.spin);
+        spinSlider.value = Math.round(val * 100);
+        updateSpinLabel(val);
+    });
+});
+
+const btnTopspin = document.getElementById('btn-topspin');
+btnTopspin.addEventListener('click', () => {
+    GAME.topspin = !GAME.topspin;
+    btnTopspin.classList.toggle('bg-emerald-500', GAME.topspin);
+    btnTopspin.classList.toggle('text-slate-950', GAME.topspin);
+    btnTopspin.classList.toggle('border-emerald-300', GAME.topspin);
+    btnTopspin.classList.toggle('bg-slate-800', !GAME.topspin);
+    updateSlingshotPreview(slingshotState.isPulling);
+});
+
+document.getElementById('btn-restart-stage').addEventListener('click', () => {
+    if (GAME.state === 'AIMING' || GAME.state === 'RESULT') {
+        setupFreeKick();
+    }
+});
+
+const stagePickerModal = document.getElementById('stage-picker-modal');
+function renderStageGrid() {
+    const grid = document.getElementById('stage-grid');
+    grid.innerHTML = '';
+    STAGES.forEach((st, idx) => {
+        const btn = document.createElement('button');
+        btn.className = `text-left p-3 rounded-xl border transition ${idx === GAME.stageIndex && GAME.mode === 'campaign' ? 'bg-red-600/30 border-red-400' : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700'}`;
+        btn.innerHTML = `
+            <div class="font-sport text-xs text-amber-400 font-bold uppercase">Fase ${idx + 1} • ${st.dist}m</div>
+            <div class="font-bold text-sm text-white truncate">${st.name}</div>
+        `;
+        btn.addEventListener('click', () => {
+            stagePickerModal.classList.add('hidden');
+            GAME.mode = 'campaign';
+            GAME.stageIndex = idx;
+            GAME.ballsLeft = 3;
+            updateScoreboardHUD();
+            setupFreeKick();
+        });
+        grid.appendChild(btn);
+    });
+}
+
+document.getElementById('btn-stage-select').addEventListener('click', () => {
+    renderStageGrid();
+    stagePickerModal.classList.remove('hidden');
+});
+document.getElementById('btn-close-stage-picker').addEventListener('click', () => {
+    stagePickerModal.classList.add('hidden');
+});
+
+document.getElementById('btn-mute').addEventListener('click', () => audio.toggleMute());
+
+function startNewSession(mode) {
+    audio.init();
+    GAME.mode = mode;
+    GAME.stageIndex = 0;
+    GAME.score = 0;
+    GAME.goals = 0;
+    GAME.combo = 0;
+    GAME.bestCombo = 0;
+    GAME.ballsLeft = mode === 'campaign' ? 3 : 5;
+
+    spinSlider.value = 0;
+    GAME.topspin = false;
+    btnTopspin.classList.remove('bg-emerald-500', 'text-slate-950', 'border-emerald-300');
+    btnTopspin.classList.add('bg-slate-800');
+    updateSpinLabel(0);
+
+    document.getElementById('main-menu').classList.add('hidden');
+    document.getElementById('end-modal').classList.add('hidden');
+    stagePickerModal.classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+
+    updateScoreboardHUD();
+    setupFreeKick();
+}
+
+document.getElementById('btn-start-campaign').addEventListener('click', () => startNewSession('campaign'));
+document.getElementById('btn-start-endless').addEventListener('click', () => startNewSession('endless'));
+document.getElementById('btn-modal-retry').addEventListener('click', () => startNewSession(GAME.mode));
+
+function returnToMainMenu() {
+    GAME.state = 'MENU';
+    slingshotGroup.visible = false;
+    trajectoryDots.forEach(d => d.visible = false);
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('end-modal').classList.add('hidden');
+    stagePickerModal.classList.add('hidden');
+    document.getElementById('main-menu').classList.remove('hidden');
+}
+
+document.getElementById('btn-menu').addEventListener('click', returnToMainMenu);
+document.getElementById('btn-modal-home').addEventListener('click', returnToMainMenu);
+
+// ==========================================
+// 14. LOOP PRINCIPAL DE ANIMAÇÃO E CÂMERA DINÂMICA
+// ==========================================
+let lastTime = performance.now();
+
+function animate(now) {
+    requestAnimationFrame(animate);
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    const elapsed = now * 0.001;
+    lastTime = now;
+
+    ballShadow.position.set(ballPhysics.pos.x, 0.02, ballPhysics.pos.z);
+    const shadowScale = Math.max(0.35, 1 - ballPhysics.pos.y * 0.14);
+    ballShadow.scale.set(shadowScale, shadowScale, 1);
+
+    if (GAME.postShakeTimer > 0) {
+        GAME.postShakeTimer -= dt;
+        goalPostGroup.position.x = Math.sin(elapsed * 75) * 0.06 * (GAME.postShakeTimer / 0.35);
+    } else {
+        goalPostGroup.position.x = 0;
+    }
+
+    if (GAME.netWaveTimer > 0) {
+        GAME.netWaveTimer -= dt;
+        goalNetMesh.scale.z = 1 + Math.sin(elapsed * 25) * 0.15 * GAME.netWaveTimer;
+    } else {
+        goalNetMesh.scale.z = 1;
+    }
+
+    if (GAME.crowdJumpTimer > 0) {
+        GAME.crowdJumpTimer -= dt;
+        crowdSpectators.forEach(f => {
+            f.mesh.position.y = f.baseY + Math.abs(Math.sin(elapsed * 12 + f.phase)) * 0.45;
+        });
+    }
+
+    if (GAME.state === 'AIMING') {
+        updateWallAnimation(dt, elapsed);
+        updateGoalkeeperAI(dt);
+
+        const toGoal = new THREE.Vector3(0, 0, GOAL_Z).sub(GAME.ballStartPos).normalize();
+        const desiredCam = GAME.ballStartPos.clone()
+            .addScaledVector(toGoal, -6.2)
+            .add(new THREE.Vector3(0, 2.35, 0));
+        const desiredLook = new THREE.Vector3(GAME.ballStartPos.x * 0.35, 1.35, GOAL_Z);
+
+        camCurrent.lerp(desiredCam, Math.min(1, dt * 8));
+        camLookCurrent.lerp(desiredLook, Math.min(1, dt * 10));
+        camera.position.copy(camCurrent);
+        camera.lookAt(camLookCurrent);
+
+    } else if (GAME.state === 'RUNUP') {
+        updateKickerRunup(dt);
+        updateWallAnimation(dt, elapsed);
+
+    } else if (GAME.state === 'FLIGHT') {
+        updateWallAnimation(dt, elapsed);
+        updateBallAndMatchPhysics(dt);
+        updateGoalkeeperAI(dt);
+
+        const desiredCam = new THREE.Vector3(
+            ballPhysics.pos.x * 0.65,
+            Math.max(1.8, ballPhysics.pos.y + 1.5),
+            ballPhysics.pos.z + 7.5
+        );
+        const desiredLook = new THREE.Vector3(ballPhysics.pos.x * 0.5, 1.2, GOAL_Z);
+        camCurrent.lerp(desiredCam, Math.min(1, dt * 6.5));
+        camLookCurrent.lerp(desiredLook, Math.min(1, dt * 8));
+        camera.position.copy(camCurrent);
+        camera.lookAt(camLookCurrent);
+
+    } else if (GAME.state === 'RESULT') {
+        if (ballPhysics.pos.z > GOAL_Z - 1.7) {
+            ballPhysics.pos.addScaledVector(ballPhysics.vel, dt);
+            ballPhysics.vel.multiplyScalar(0.92);
+            ballGroup.position.copy(ballPhysics.pos);
+        }
+
+        GAME.resultTimer -= dt;
+        if (GAME.resultTimer <= 0) {
+            if (GAME.mode === 'campaign' && GAME.stageIndex >= STAGES.length) {
+                showEndModal(true);
+            } else if (GAME.ballsLeft <= 0) {
+                showEndModal(false);
+            } else {
+                setupFreeKick();
+            }
+        }
+    } else if (GAME.state === 'MENU') {
+        const angle = elapsed * 0.22;
+        camera.position.set(Math.sin(angle) * 24, 9.5, -18 + Math.cos(angle) * 20);
+        camera.lookAt(0, 1.5, GOAL_Z);
+    }
+
+    renderer.render(scene, camera);
+}
+
+window.onload = function () {
+    buildStadium();
+    animate(performance.now());
+};
+</script>
+</body>
+</html>

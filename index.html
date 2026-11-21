@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Fliperama IA</title>
+<meta name="theme-color" content="#120a24">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #120a24;
+    --bg2: #1d1038;
+    --painel: #241447;
+    --borda: #0a0614;
+    --rosa: #ff3fa4;
+    --ciano: #2ee6ff;
+    --amarelo: #ffd23f;
+    --verde: #4dff7a;
+    --laranja: #ff8a3d;
+    --texto: #f4ecff;
+    --suave: #b9a8e0;
+    --pixel: "Press Start 2P", monospace;
+    --leitura: "VT323", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(circle at 20% 0%, #3a1670 0%, transparent 45%),
+      radial-gradient(circle at 90% 30%, #0d3a5c 0%, transparent 40%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--texto);
+    font-family: var(--leitura);
+    font-size: 22px;
+    line-height: 1.3;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* grade de pixels no fundo */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* efeito de tela de fliperama (scanlines) */
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 2px, transparent 2px 4px);
+    pointer-events: none;
+    z-index: 100;
+  }
+  img, canvas, svg { image-rendering: pixelated; }
+  .envoltorio { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+
+  /* ---------- BARRA DE STATUS (HUD) ---------- */
+  .hud {
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pixel); font-size: 10px;
+    padding: 14px 0; color: var(--suave);
+  }
+  .hud b { color: var(--amarelo); font-weight: normal; }
+  .vidas { color: var(--rosa); letter-spacing: 3px; }
+
+  /* ---------- CABEÇALHO ---------- */
+  header { text-align: center; padding: 30px 0 10px; }
+  .logo-caixa {
+    width: 120px; height: 120px; margin: 0 auto 22px;
+    background: var(--painel);
+    border: 4px solid var(--borda);
+    box-shadow: 0 0 0 4px var(--ciano), 8px 8px 0 4px var(--rosa);
+    display: grid; place-items: center;
+    overflow: hidden;
+  }
+  .logo-caixa img { width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
+  .logo-caixa.com-logo { width: 150px; height: 150px; background: #fff; padding: 4px; }
+  .logo-caixa svg { width: 76%; }
+  .nome-escola {
+    font-family: var(--pixel);
+    font-size: clamp(16px, 3.6vw, 34px);
+    line-height: 1.5;
+    color: var(--amarelo);
+    text-shadow: 4px 4px 0 var(--rosa), 8px 8px 0 var(--borda);
+    text-transform: uppercase;
+  }
+  .subtitulo {
+    margin-top: 16px;
+    font-family: var(--pixel); font-size: clamp(9px, 1.6vw, 13px);
+    color: var(--ciano); letter-spacing: 2px;
+  }
+  .press-start {
+    display: inline-block; margin-top: 28px;
+    font-family: var(--pixel); font-size: 13px; color: var(--verde);
+    text-decoration: none;
+    animation: piscar 1s steps(1) infinite;
+  }
+  @keyframes piscar { 50% { opacity: 0; } }
+
+  /* sprites decorativos flutuando */
+  .decor { position: absolute; z-index: 0; opacity: .9; animation: flutuar 3s steps(4) infinite alternate; }
+  .decor svg { display: block; }
+  @keyframes flutuar { to { transform: translateY(-14px); } }
+
+  /* ---------- CAIXAS PIXELADAS ---------- */
+  .caixa {
+    background: var(--painel);
+    border: 4px solid var(--borda);
+    box-shadow: inset -6px -6px 0 rgba(0,0,0,.35), inset 6px 6px 0 rgba(255,255,255,.08), 8px 8px 0 var(--borda);
+  }
+
+  /* ---------- SOBRE O PROJETO ---------- */
+  .sobre { margin: 50px auto 0; padding: 28px; max-width: 900px; position: relative; }
+  .sobre h2, .secao-titulo {
+    font-family: var(--pixel); font-size: clamp(12px, 2vw, 16px);
+    color: var(--rosa); margin-bottom: 16px; line-height: 1.6;
+  }
+  .sobre p { color: var(--texto); margin-bottom: 10px; }
+  .sobre p strong { color: var(--amarelo); font-weight: normal; }
+  .etapas {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-top: 22px;
+  }
+  .etapa {
+    background: var(--bg2); border: 4px solid var(--borda);
+    padding: 14px 8px; text-align: center;
+  }
+  .etapa .nivel { font-family: var(--pixel); font-size: 8px; color: var(--suave); }
+  .etapa .icone { font-size: 30px; margin: 8px 0 4px; }
+  .etapa .rotulo { font-family: var(--pixel); font-size: 9px; color: var(--ciano); line-height: 1.6; }
+  .etapa:nth-child(2) .rotulo { color: var(--verde); }
+  .etapa:nth-child(3) .rotulo { color: var(--amarelo); }
+  .etapa:nth-child(4) .rotulo { color: var(--rosa); }
+
+  /* ---------- SELEÇÃO DE JOGOS ---------- */
+  #jogos { padding-top: 60px; }
+  .barra-jogos {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 16px; margin-bottom: 26px;
+  }
+  .secao-titulo { margin: 0; color: var(--amarelo); }
+  .secao-titulo span { color: var(--verde); }
+  .busca {
+    flex: 1; max-width: 380px; min-width: 220px;
+    font-family: var(--leitura); font-size: 22px;
+    padding: 10px 14px;
+    background: var(--bg2); color: var(--texto);
+    border: 4px solid var(--borda);
+    box-shadow: 0 0 0 3px var(--ciano);
+    outline: none;
+  }
+  .busca::placeholder { color: var(--suave); }
+  .busca:focus { box-shadow: 0 0 0 3px var(--amarelo); }
+
+  .grade {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 26px;
+    padding-bottom: 40px;
+  }
+  .cartucho {
+    display: flex; flex-direction: column;
+    background: var(--painel);
+    border: 4px solid var(--borda);
+    box-shadow: 6px 6px 0 var(--borda);
+    text-decoration: none; color: inherit;
+    cursor: pointer;
+    transition: transform .08s steps(2), box-shadow .08s steps(2);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cartucho:hover, .cartucho:focus-visible {
+    transform: translate(-4px, -4px);
+    box-shadow: 10px 10px 0 var(--cor, var(--rosa));
+    outline: none;
+  }
+  .cartucho:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--borda); }
+  .thumb {
+    position: relative; aspect-ratio: 16 / 9;
+    background: #000; overflow: hidden;
+    border-bottom: 4px solid var(--borda);
+  }
+  .thumb img, .thumb canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .play {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: rgba(18,10,36,.55);
+    font-family: var(--pixel); font-size: 14px; color: var(--amarelo);
+    opacity: 0; transition: opacity .1s;
+  }
+  .cartucho:hover .play, .cartucho:focus-visible .play { opacity: 1; }
+  .info { padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .info h3 { font-family: var(--pixel); font-size: 12px; line-height: 1.6; color: var(--texto); }
+  .botao-jogar {
+    margin-top: auto; align-self: flex-start;
+    font-family: var(--pixel); font-size: 10px;
+    background: var(--cor, var(--rosa)); color: var(--borda);
+    padding: 9px 12px;
+    border: 3px solid var(--borda);
+    box-shadow: inset -3px -3px 0 rgba(0,0,0,.25);
+  }
+  .vazio { grid-column: 1 / -1; text-align: center; padding: 40px; font-family: var(--pixel); font-size: 12px; color: var(--suave); line-height: 2; }
+
+  /* ---------- RODAPÉ ---------- */
+  footer { text-align: center; padding: 40px 0 50px; color: var(--suave); }
+  footer .game-over { font-family: var(--pixel); font-size: 14px; color: var(--rosa); margin-bottom: 12px; }
+  footer small { display: block; margin-top: 8px; font-size: 18px; opacity: .7; }
+
+  /* ---------- TELA DO JOGO ---------- */
+  .player {
+    position: fixed; inset: 0; z-index: 200;
+    display: none; flex-direction: column;
+    background: #000;
+    height: 100vh; height: 100dvh;
+  }
+  .player.aberto { display: flex; }
+  .player-barra {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    background: var(--bg2);
+    border-bottom: 4px solid var(--borda);
+    flex-shrink: 0;
+  }
+  .player-titulo { flex: 1; min-width: 0; }
+  .player-titulo h2 {
+    font-family: var(--pixel); font-size: 11px; color: var(--amarelo);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6;
+  }
+  .player-titulo p { font-size: 18px; color: var(--ciano); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn {
+    font-family: var(--pixel); font-size: 10px;
+    background: var(--painel); color: var(--texto);
+    border: 3px solid var(--borda);
+    box-shadow: 0 0 0 2px var(--ciano);
+    padding: 9px 10px; cursor: pointer;
+    text-decoration: none; white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn:hover { background: var(--ciano); color: var(--borda); }
+  .btn.voltar { box-shadow: 0 0 0 2px var(--rosa); }
+  .btn.voltar:hover { background: var(--rosa); }
+  .player iframe { flex: 1; width: 100%; border: 0; background: #fff; display: block; }
+
+  /* ---------- CELULAR ---------- */
+  @media (max-width: 640px) {
+    body { font-size: 20px; }
+    .etapas { grid-template-columns: repeat(2, 1fr); }
+    .sobre { padding: 20px; }
+    .decor { display: none; }
+    .grade { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+    .info { padding: 10px; }
+    .info h3 { font-size: 10px; }
+    .botao-jogar { font-size: 8px; padding: 7px 9px; }
+    .hud { font-size: 8px; }
+    .btn .txt { display: none; }
+    .nome-escola { text-shadow: 2px 2px 0 var(--rosa), 4px 4px 0 var(--borda); }
+  }
+
+  /* modo arco-íris (segredo) */
+  body.arcoiris { animation: arcoiris 2s linear infinite; }
+  @keyframes arcoiris { to { filter: hue-rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .press-start, .decor, body.arcoiris { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="envoltorio">
+
+  <div class="hud">
+    <span>1UP <b id="placar">000000</b></span>
+    <span>JOGOS <b id="contador">00</b></span>
+    <span class="vidas">♥♥♥</span>
+  </div>
+
+  <header>
+    <div class="decor" style="left:2%; top:140px" id="decor-controle"></div>
+    <div class="decor" style="right:4%; top:110px; animation-delay:.6s" id="decor-coracao"></div>
+    <div class="decor" style="right:12%; top:300px; animation-delay:1.2s" id="decor-estrela"></div>
+
+    <div class="logo-caixa" id="logo"></div>
+    <h1 class="nome-escola" id="nome-escola"></h1>
+    <p class="subtitulo" id="subtitulo"></p>
+    <a class="press-start" href="#jogos">▶ PRESS START</a>
+  </header>
+
+  <section class="sobre caixa">
+    <h2>&gt; MISSÃO: CRIAR JOGOS COM IA_</h2>
+    <p>Neste projeto, os alunos das turmas <strong>3ºB, 1ºD, 2ºD e 3ºD</strong> do curso de Inteligência Artificial aprenderam a usar a IA como parceira para criar seus próprios jogos com <strong>vibe coding</strong>.</p>
+    <p>No vibe coding, em vez de escrever cada linha de código sozinho, o aluno descreve sua ideia para a IA, testa o resultado, pede ajustes e repete até o jogo ficar do jeito que imaginou. Todos os jogos foram feitos com <strong>HTML, CSS e JavaScript</strong> e rodam direto no navegador, no celular, tablet ou computador.</p>
+    <div class="etapas">
+      <div class="etapa"><div class="nivel">FASE 1</div><div class="icone">💡</div><div class="rotulo">IDEIA</div></div>
+      <div class="etapa"><div class="nivel">FASE 2</div><div class="icone">💬</div><div class="rotulo">PROMPT</div></div>
+      <div class="etapa"><div class="nivel">FASE 3</div><div class="icone">🔧</div><div class="rotulo">TESTE E AJUSTE</div></div>
+      <div class="etapa"><div class="nivel">FASE 4</div><div class="icone">🏆</div><div class="rotulo">JOGO PRONTO</div></div>
+    </div>
+  </section>
+
+  <section id="jogos">
+    <div class="barra-jogos">
+      <h2 class="secao-titulo">ESCOLHA SEU JOGO <span>▼</span></h2>
+      <input class="busca" id="busca" type="search" placeholder="Buscar jogo..." aria-label="Buscar jogo">
+    </div>
+    <div class="grade" id="grade"></div>
+  </section>
+
+  <footer>
+    <div class="game-over">GAME OVER?</div>
+    <div>Escolha outro jogo e continue! 🕹️</div>
+    <small id="rodape"></small>
+  </footer>
+</div>
+
+<!-- Tela onde o jogo abre -->
+<div class="player" id="player" role="dialog" aria-modal="true" aria-labelledby="player-nome">
+  <div class="player-barra">
+    <button class="btn voltar" id="btn-voltar">◀<span class="txt"> VOLTAR</span></button>
+    <div class="player-titulo">
+      <h2 id="player-nome"></h2>
+    </div>
+    <button class="btn" id="btn-tela-cheia" title="Tela cheia">⛶<span class="txt"> TELA CHEIA</span></button>
+    <a class="btn" id="btn-nova-aba" target="_blank" rel="noopener" title="Abrir em nova aba">↗<span class="txt"> NOVA ABA</span></a>
+  </div>
+  <iframe id="tela-jogo" title="Jogo" allow="fullscreen; autoplay; gamepad"></iframe>
+</div>
+
+<script>
+/* ==========================================================
+   CONFIGURAÇÃO — edite só esta parte
+   ========================================================== */
+const ESCOLA = {
+  nome: "Escola 11 de Outubro",
+  subtitulo: "Curso de Inteligência Artificial",
+  logo: "img/icon-escola-300.jpg", // logo da escola, versão leve (original em "img/icon escola.jpg")
+  rodape: "Jogos criados pelos alunos com HTML, CSS, JavaScript e IA"
+};
+
+/* Para adicionar um jogo: copie uma linha e troque os dados.
+   - arquivo: caminho do jogo dentro da pasta "jogos"
+   - thumb:   imagem de capa (opcional). Sem thumb, o site cria uma capa pixelada automática. */
+const JOGOS = [
+  { titulo: "Esquadrão Low Poly 5v5",          arquivo: "jogos/esquadrao-low-poly.html",      thumb: "thumbs/esquadrao-low-poly.png?v=3" },
+  { titulo: "Reino dos Saltos 3D",             arquivo: "jogos/reino-dos-saltos-3d.html",     thumb: "thumbs/reino-dos-saltos-3d.png?v=3" },
+  { titulo: "Minigolfe 3D",                    arquivo: "jogos/minigolfe-3d.html",            thumb: "thumbs/minigolfe-3d.png?v=3" },
+  { titulo: "Reinos de Aurora",                arquivo: "jogos/reinos-de-aurora.html",        thumb: "thumbs/reinos-de-aurora.png?v=3" },
+  { titulo: "Zumbis 3D",                       arquivo: "jogos/zumbis-3d.html",               thumb: "thumbs/zumbis-3d.png?v=3" },
+  { titulo: "Arena Sobre Rodas",               arquivo: "jogos/arena-sobre-rodas.html",       thumb: "thumbs/arena-sobre-rodas.png?v=3" },
+  { titulo: "Arena Rumble",                    arquivo: "jogos/arena-rumble.html",            thumb: "thumbs/arena-rumble.png?v=3" },
+  { titulo: "Defesa da Torre",                 arquivo: "jogos/defesa-da-torre.html",         thumb: "thumbs/defesa-da-torre.png?v=3" },
+  { titulo: "F1 Armagedom",                    arquivo: "jogos/f1-armagedom.html",            thumb: "thumbs/f1-armagedom.png?v=3" },
+  { titulo: "Explorando a Amazônia",           arquivo: "jogos/explorando-a-amazonia.html",   thumb: "thumbs/explorando-a-amazonia.png?v=3" },
+  { titulo: "Mestre das Faltas 3D",            arquivo: "jogos/mestre-das-faltas-3d.html",    thumb: "thumbs/mestre-das-faltas-3d.png?v=3" },
+  { titulo: "Mundo de Blocos",                 arquivo: "jogos/mundo-de-blocos.html",         thumb: "thumbs/mundo-de-blocos.png?v=3" },
+  { titulo: "Noite Sem Fim",                   arquivo: "jogos/noite-sem-fim.html",           thumb: "thumbs/noite-sem-fim.png?v=3" },
+  { titulo: "A Casa Sombria",                  arquivo: "jogos/a-casa-sombria.html",          thumb: "thumbs/a-casa-sombria.png?v=3" },
+  { titulo: "Aventura das Plataformas",        arquivo: "jogos/aventura-das-plataformas.html", thumb: "thumbs/aventura-das-plataformas.png?v=3" },
+  { titulo: "Aventura na Floresta",            arquivo: "jogos/aventura-na-floresta.html",    thumb: "thumbs/aventura-na-floresta.png?v=3" },
+  { titulo: "Catch the Stars Arcade",          arquivo: "jogos/catch-the-stars.html",         thumb: "thumbs/catch-the-stars.png?v=3" },
+  { titulo: "City Straight Rider 3D",          arquivo: "jogos/city-straight-rider.html",     thumb: "thumbs/city-straight-rider.png?v=3" },
+  { titulo: "Corrida Insana",                  arquivo: "jogos/corrida-insana.html",          thumb: "thumbs/corrida-insana.png?v=3" },
+  { titulo: "Fly Squirrel — Esquilo Voador",   arquivo: "jogos/fly-squirrel.html",            thumb: "thumbs/fly-squirrel.png?v=3" },
+  { titulo: "Guerreiras Pixel: Arena Neon",    arquivo: "jogos/guerreiras-pixel.html",        thumb: "thumbs/guerreiras-pixel.png?v=3" },
+  { titulo: "Jogo de Clique",                  arquivo: "jogos/jogo-de-clique.html",          thumb: "thumbs/jogo-de-clique.png?v=3" },
+  { titulo: "Neon Run",                        arquivo: "jogos/neon-run.html",                thumb: "thumbs/neon-run.png?v=3" },
+  { titulo: "O Corredor - Terror",             arquivo: "jogos/o-corredor-terror.html",       thumb: "thumbs/o-corredor-terror.png?v=3" },
+  { titulo: "O Último Sinal",                  arquivo: "jogos/o-ultimo-sinal.html",          thumb: "thumbs/o-ultimo-sinal.png?v=3" },
+  { titulo: "Pastel Pour",                     arquivo: "jogos/pastel-pour.html",             thumb: "thumbs/pastel-pour.png?v=3" },
+  { titulo: "Salto Estelar",                   arquivo: "jogos/salto-estelar.html",           thumb: "thumbs/salto-estelar.png?v=3" },
+  { titulo: "Torre Saltitante",                arquivo: "jogos/torre-saltitante.html",        thumb: "thumbs/torre-saltitante.png?v=3" },
+  { titulo: "Zona Final — Battle Arena",       arquivo: "jogos/zona-final.html",              thumb: "thumbs/zona-final.png?v=3" },
+];
+/* ========================================================== */
+
+
+const CORES = ["#ff3fa4", "#2ee6ff", "#ffd23f", "#4dff7a", "#ff8a3d", "#b57bff"];
+
+/* --- desenha sprites em pixel art a partir de "mapas" de texto --- */
+function sprite(mapa, paleta, tamanho) {
+  const alt = mapa.length, larg = mapa[0].length;
+  let rects = "";
+  mapa.forEach((linha, y) => [...linha].forEach((c, x) => {
+    if (paleta[c]) rects += `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${paleta[c]}"/>`;
+  }));
+  return `<svg viewBox="0 0 ${larg} ${alt}" width="${larg * tamanho}" height="${alt * tamanho}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
+}
+const CONTROLE = [
+  "..###########..",
+  ".##k#######r##.",
+  "##kkk#####y#b##",
+  "###k#######g###",
+  "####.......####",
+  ".##.........##.",
+];
+const PALETA_CONTROLE = { "#": "#6b4bd6", k: "#120a24", r: "#ff3fa4", y: "#ffd23f", b: "#2ee6ff", g: "#4dff7a" };
+const CORACAO = [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."];
+const ESTRELA = ["...X...", "...X...", "XXXXXXX", ".XXXXX.", "..XXX..", ".XX.XX.", "X.....X"];
+
+document.getElementById("decor-controle").innerHTML = sprite(CONTROLE, PALETA_CONTROLE, 6);
+document.getElementById("decor-coracao").innerHTML = sprite(CORACAO, { X: "#ff3fa4" }, 6);
+document.getElementById("decor-estrela").innerHTML = sprite(ESTRELA, { X: "#ffd23f" }, 5);
+
+/* --- cabeçalho --- */
+document.getElementById("nome-escola").textContent = ESCOLA.nome;
+document.getElementById("subtitulo").textContent = ESCOLA.subtitulo;
+document.getElementById("rodape").textContent = ESCOLA.rodape;
+document.title = "Fliperama IA | " + ESCOLA.nome;
+
+const caixaLogo = document.getElementById("logo");
+const usarLogoPixel = () => { caixaLogo.innerHTML = sprite(CONTROLE, PALETA_CONTROLE, 6); };
+if (ESCOLA.logo) {
+  const img = new Image();
+  img.alt = "Logo " + ESCOLA.nome;
+  img.onload = () => { caixaLogo.innerHTML = ""; caixaLogo.classList.add("com-logo"); caixaLogo.appendChild(img); };
+  img.onerror = usarLogoPixel;
+  img.src = ESCOLA.logo;
+} else usarLogoPixel();
+
+/* --- capa pixelada automática (diferente para cada jogo) --- */
+function semente(texto) {
+  let h = 1779033703;
+  for (const c of texto) h = Math.imul(h ^ c.charCodeAt(0), 3432918353), h = (h << 13) | (h >>> 19);
+  return () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+}
+function capaPixel(titulo, cor) {
+  const L = 64, A = 36;
+  const cv = document.createElement("canvas");
+  cv.width = L; cv.height = A;
+  const ctx = cv.getContext("2d");
+  const r = semente(titulo);
+  const ceus = [["#120a24", "#3a1670"], ["#06122e", "#0d3a5c"], ["#1a0820", "#5c1a4a"], ["#0b1a12", "#1d4a30"]];
+  const [c1, c2] = ceus[Math.floor(r() * ceus.length)];
+  // céu em faixas
+  for (let y = 0; y < A; y++) { ctx.fillStyle = y < A * 0.5 ? c1 : c2; ctx.fillRect(0, y, L, 1); }
+  for (let y = Math.floor(A * 0.4); y < A * 0.5; y += 2) { ctx.fillStyle = c2; ctx.fillRect(0, y, L, 1); }
+  // estrelas
+  for (let i = 0; i < 26; i++) { ctx.fillStyle = r() > 0.7 ? cor : "#ffffff"; ctx.fillRect(Math.floor(r() * L), Math.floor(r() * A * 0.6), 1, 1); }
+  // montanhas
+  ctx.fillStyle = "rgba(0,0,0,.35)";
+  let h = 8 + r() * 6;
+  for (let x = 0; x < L; x++) { h += (r() - 0.5) * 2.4; h = Math.max(4, Math.min(14, h)); ctx.fillRect(x, A - 6 - Math.floor(h), 1, Math.floor(h)); }
+  // chão
+  ctx.fillStyle = cor; ctx.fillRect(0, A - 6, L, 1);
+  ctx.fillStyle = "#0a0614"; ctx.fillRect(0, A - 5, L, 5);
+  for (let x = 0; x < L; x += 4) { ctx.fillStyle = cor; ctx.globalAlpha = .35; ctx.fillRect(x + (r() * 2 | 0), A - 3, 2, 1); }
+  ctx.globalAlpha = 1;
+  // personagem simétrico gerado
+  const N = 8, meio = N / 2, px = 2;
+  const ox = Math.floor((L - N * px) / 2), oy = A - 6 - N * px - 1;
+  const cor2 = CORES[Math.floor(r() * CORES.length)];
+  for (let y = 0; y < N; y++) for (let x = 0; x < meio; x++) {
+    const v = r();
+    if (v < 0.5) continue;
+    ctx.fillStyle = v > 0.85 ? cor2 : cor;
+    ctx.fillRect(ox + x * px, oy + y * px, px, px);
+    ctx.fillRect(ox + (N - 1 - x) * px, oy + y * px, px, px);
+  }
+  // olhos
+  ctx.fillStyle = "#0a0614";
+  ctx.fillRect(ox + 2 * px, oy + 3 * px, px, px);
+  ctx.fillRect(ox + 5 * px, oy + 3 * px, px, px);
+  return cv;
+}
+
+/* --- grade de jogos --- */
+const grade = document.getElementById("grade");
+const busca = document.getElementById("busca");
+const slug = j => j.arquivo.split("/").pop().replace(/\.html?$/i, "");
+
+document.getElementById("contador").textContent = String(JOGOS.length).padStart(2, "0");
+
+function montarGrade(filtro = "") {
+  const f = filtro.trim().toLowerCase();
+  const lista = JOGOS.filter(j => j.titulo.toLowerCase().includes(f));
+  grade.innerHTML = "";
+  if (!lista.length) {
+    grade.innerHTML = `<p class="vazio">NENHUM JOGO ENCONTRADO<br>TENTE OUTRA BUSCA</p>`;
+    return;
+  }
+  lista.forEach(j => {
+    const cor = CORES[JOGOS.indexOf(j) % CORES.length];
+    const a = document.createElement("a");
+    a.className = "cartucho";
+    a.href = "#/jogar/" + slug(j);
+    a.style.setProperty("--cor", cor);
+    a.innerHTML = `
+      <div class="thumb"><div class="play">▶ JOGAR</div></div>
+      <div class="info">
+        <h3></h3>
+        <span class="botao-jogar">▶ JOGAR</span>
+      </div>`;
+    a.querySelector("h3").textContent = j.titulo;
+    const thumb = a.querySelector(".thumb");
+    const capa = capaPixel(j.titulo, cor);
+    if (j.thumb) {
+      const img = new Image();
+      img.alt = j.titulo;
+      img.loading = "lazy";
+      img.onerror = () => img.replaceWith(capa);
+      img.src = j.thumb;
+      thumb.prepend(img);
+    } else thumb.prepend(capa);
+    grade.appendChild(a);
+  });
+}
+busca.addEventListener("input", e => montarGrade(e.target.value));
+montarGrade();
+
+/* --- abrir / fechar o jogo --- */
+const player = document.getElementById("player");
+const tela = document.getElementById("tela-jogo");
+const btnTelaCheia = document.getElementById("btn-tela-cheia");
+let rolagemSalva = 0;
+let placar = 0;
+
+function abrirJogo(j) {
+  rolagemSalva = window.scrollY;
+  document.getElementById("player-nome").textContent = j.titulo;
+  document.getElementById("btn-nova-aba").href = j.arquivo;
+  trocarTela(j.arquivo);
+  player.classList.add("aberto");
+  document.body.style.overflow = "hidden";
+  document.title = j.titulo + " | Fliperama IA";
+  tela.onload = () => { try { tela.contentWindow.focus(); } catch (e) {} tela.focus(); };
+  placar += 100;
+  document.getElementById("placar").textContent = String(placar).padStart(6, "0");
+}
+function fecharJogo() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  player.classList.remove("aberto");
+  trocarTela("about:blank");
+  document.body.style.overflow = "";
+  document.title = "Fliperama IA | " + ESCOLA.nome;
+  window.scrollTo(0, rolagemSalva);
+}
+// troca a página do iframe SEM criar entrada no histórico
+// (antes, o "voltar" voltava dentro do iframe e mostrava tela branca)
+function trocarTela(url) {
+  try { tela.contentWindow.location.replace(url); }
+  catch (e) { tela.src = url; }
+}
+function rotear() {
+  const m = location.hash.match(/^#\/jogar\/(.+)$/);
+  const j = m && JOGOS.find(x => slug(x) === decodeURIComponent(m[1]));
+  if (j) abrirJogo(j);
+  else if (player.classList.contains("aberto")) fecharJogo();
+}
+window.addEventListener("hashchange", rotear);
+rotear();
+
+document.getElementById("btn-voltar").addEventListener("click", () => {
+  fecharJogo();
+  if (location.hash.startsWith("#/jogar/")) history.pushState(null, "", "#jogos");
+});
+
+// tela cheia (alguns iPhones não suportam; aí o botão some)
+const podeTelaCheia = document.fullscreenEnabled || document.webkitFullscreenEnabled;
+if (!podeTelaCheia) btnTelaCheia.style.display = "none";
+btnTelaCheia.addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else (player.requestFullscreen || player.webkitRequestFullscreen).call(player);
+});
+
+/* --- segredo: código Konami (↑ ↑ ↓ ↓ ← → ← → B A) --- */
+const konami = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+let pos = 0;
+document.addEventListener("keydown", e => {
+  if (player.classList.contains("aberto")) return;
+  pos = (e.key.toLowerCase() === konami[pos].toLowerCase()) ? pos + 1 : (e.key === konami[0] ? 1 : 0);
+  if (pos === konami.length) {
+    pos = 0;
+    document.body.classList.toggle("arcoiris");
+    document.querySelector(".vidas").textContent = document.body.classList.contains("arcoiris") ? "♥♥♥♥♥♥♥♥♥" : "♥♥♥";
+  }
+});
+</script>
+</body>
+</html>

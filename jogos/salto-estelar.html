@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salto Estelar</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#10172d;color:white;font-family:Arial,sans-serif;text-align:center}
+header{padding:12px;background:#192544;color:#ffe28a}
+canvas{display:block;width:100%;max-width:960px;margin:auto;touch-action:none}
+.controls{display:flex;justify-content:space-between;max-width:500px;margin:12px auto;padding:0 12px;gap:12px}
+button{padding:16px;border:0;border-radius:12px;background:#29416d;color:white;font-size:20px;touch-action:manipulation}
+#jump{background:#167b82}
+#start{background:#ffe28a;color:#17172b;font-weight:bold;font-size:16px}
+#message{padding:10px;color:#ffe28a}
+</style>
+<style>/* ajuste Fliperama: canvas cabe na altura da tela */ #game{width:auto;height:auto;max-width:100%;max-height:max(180px,calc(100vh - 300px))}</style>
+</head>
+<body>
+<header>
+<h2>⭐ SALTO ESTELAR</h2>
+<div>Fase <span id="fase">1/5</span> | Estrelas: <span id="score">0</span>/<span id="total">8</span> |
+Vidas: <span id="lives">3</span></div>
+</header>
+
+<canvas id="game" width="800" height="450"></canvas>
+<button id="start">JOGAR / RECOMEÇAR</button>
+<div id="message">Colete as estrelas e encontre o portal!</div>
+
+<div class="controls">
+ <div>
+  <button id="left">◀</button>
+  <button id="right">▶</button>
+ </div>
+ <button id="jump">PULAR ⤴</button>
+</div>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const scoreEl=document.getElementById("score");
+const livesEl=document.getElementById("lives");
+const message=document.getElementById("message");
+
+/* ---------- FASES ----------
+   p: plataformas [x,y,w,h] ou {x,y,w,m:{eixo,min,max,vel}}
+   s: estrelas   e: inimigos (índice da plataforma onde patrulham)
+   portal: posição   cometas: chuva de cometas */
+const FASES=[
+ {nome:"Noite Estrelada",ceu:["#101a3b","#426b91"],
+  p:[[0,410,180,40],[220,360,100,18],[350,300,100,18],[480,350,100,18],[610,290,100,18],[700,410,100,40],[120,300,55,15],[400,220,60,15]],
+  s:[[90,380],[145,270],[260,325],[390,265],[515,315],[640,255],[430,185],[745,375]],
+  e:[1,3],portal:[770,390],cometas:0},
+ {nome:"Nebulosa Rosa",ceu:["#2a0f3b","#8a4f8f"],
+  p:[[0,410,140,40],[180,360,90,18],[300,300,80,18],[180,230,80,15],[330,170,90,15],[470,230,90,18],[600,290,90,18],[700,380,100,70]],
+  s:[[70,380],[225,330],[340,270],[220,200],[375,140],[515,200],[645,260],[740,350]],
+  e:[2,6],portal:[770,350],cometas:0},
+ {nome:"Órbitas Móveis",ceu:["#06243a","#1f7a8c"],
+  p:[[0,410,120,40],{x:150,y:370,w:80,m:{eixo:"x",min:140,max:280,vel:1.2}},[330,320,90,18],{x:460,y:300,w:80,m:{eixo:"y",min:220,max:330,vel:0.8}},[580,230,90,18],[700,400,100,50],[200,240,80,15],[120,170,70,15]],
+  s:[[60,380],[190,340],[375,290],[240,210],[155,140],[500,190],[625,200],[750,370]],
+  e:[2,4],portal:[770,370],cometas:0},
+ {nome:"Chuva de Cometas",ceu:["#1a0b0b","#6b3a2a"],
+  p:[[0,410,200,40],[240,350,90,18],[380,290,90,18],[520,350,90,18],[640,290,90,18],[700,410,100,40],[150,280,70,15],[440,200,80,15]],
+  s:[[100,380],[285,320],[425,260],[565,320],[685,260],[185,250],[480,170],[750,380]],
+  e:[1,3,4],portal:[770,390],cometas:2.2},
+ {nome:"Constelação Final",ceu:["#000010","#3a2a7a"],
+  p:[[0,410,110,40],{x:140,y:360,w:70,m:{eixo:"x",min:130,max:240,vel:1.4}},[290,310,80,18],{x:400,y:270,w:70,m:{eixo:"y",min:200,max:300,vel:1}},[500,200,80,18],{x:610,y:250,w:70,m:{eixo:"x",min:600,max:700,vel:1.1}},[720,400,80,50],[170,220,70,15],[320,150,80,15]],
+  s:[[60,380],[175,330],[330,280],[435,170],[540,170],[650,220],[205,190],[360,120]],
+  e:[2,4],portal:[760,370],cometas:1.6}
+];
+
+let player, platforms, stars, enemies, portal, cometas, parts;
+let score=0,lives=3,running=false,won=false,fase=0;
+let keys={left:false,right:false};
+let frame=0,timerCometa=0;
+
+function carregar(n){
+ fase=n;const F=FASES[n];
+ player={x:35,y:350,w:25,h:32,vx:0,vy:0,ground:false,inv:0,chao:null,olha:1};
+ platforms=F.p.map(p=>Array.isArray(p)?{x:p[0],y:p[1],w:p[2],h:p[3],dx:0,dy:0}:{x:p.x,y:p.y,w:p.w,h:18,m:{...p.m,dir:1},dx:0,dy:0});
+ stars=F.s.map(([x,y])=>({x,y,t:false}));
+ enemies=F.e.map((i,k)=>{const p=platforms[i];return {p,x:p.x+5,y:p.y-28,w:24,h:28,d:k%2?-1:1,vel:1.2+n*0.15};});
+ portal={x:F.portal[0],y:F.portal[1]};
+ cometas=[];parts=[];timerCometa=2;
+ score=0;running=true;won=false;
+ scoreEl.textContent=score;
+ document.getElementById("total").textContent=stars.length;
+ document.getElementById("fase").textContent=(n+1)+"/"+FASES.length;
+ livesEl.textContent=lives;
+ message.textContent="Fase "+(n+1)+": "+F.nome+"! Colete todas as estrelas.";
+}
+function reset(){lives=3;carregar(0);SOM.clique();}
+
+function jump(){
+ if(running&&player.ground){player.vy=-11.5;player.ground=false;SOM.pulo();}
+}
+
+function loseLife(){
+ if(player.inv>0&&player.y<=470)return;   // invencível só protege de inimigos, não de quedas
+ lives--;livesEl.textContent=lives;
+ SOM.dano();
+ if(lives<=0){
+  running=false;message.textContent="Fim de jogo! Toque em recomeçar.";
+  setTimeout(SOM.derrota,300);
+ }else{
+  player.x=35;player.y=350;player.vx=0;player.vy=0;player.inv=90;
+ }
+}
+
+function update(k){
+ frame+=k;
+ parts.forEach(p=>{p.x+=p.vx*k;p.y+=p.vy*k;p.vy+=0.2*k;p.v-=0.03*k;});
+ parts=parts.filter(p=>p.v>0);
+ if(!running)return;
+
+ // plataformas móveis
+ for(const p of platforms){
+  p.dx=p.dy=0;if(!p.m)continue;
+  const v=p.m.vel*p.m.dir*k;
+  if(p.m.eixo==="x"){p.x+=v;p.dx=v;if(p.x<p.m.min||p.x>p.m.max)p.m.dir*=-1;}
+  else{p.y+=v;p.dy=v;if(p.y<p.m.min||p.y>p.m.max)p.m.dir*=-1;}
+ }
+ if(player.ground&&player.chao){player.x+=player.chao.dx;player.y+=player.chao.dy;}
+
+ player.vx=(keys.right?4:0)-(keys.left?4:0);
+ if(player.vx)player.olha=Math.sign(player.vx);
+ player.x+=player.vx*k;
+ player.x=Math.max(0,Math.min(775,player.x));
+
+ let oldY=player.y;
+ player.vy=Math.min(player.vy+0.55*k,12);
+ player.y+=player.vy*k;
+ player.ground=false;player.chao=null;
+
+ for(const p of platforms){
+  if(player.x+player.w>p.x&&player.x<p.x+p.w&&
+     oldY+player.h<=p.y+Math.abs(p.dy)+1&&player.y+player.h>=p.y&&player.vy>=0){
+   player.y=p.y-player.h;player.vy=0;player.ground=true;player.chao=p;
+  }
+ }
+
+ if(player.inv>0)player.inv=Math.max(0,player.inv-k);
+ if(player.y>470){loseLife();return}
+
+ for(const s of stars){
+  if(!s.t&&Math.abs(player.x+12-s.x)<20&&Math.abs(player.y+15-s.y)<22){
+   s.t=true;score++;scoreEl.textContent=score;
+   SOM.moeda();
+   for(let i=0;i<10;i++)parts.push({x:s.x,y:s.y,vx:(Math.random()-.5)*4,vy:-Math.random()*3,v:1,c:"#ffe47b"});
+   message.textContent=score===stars.length?"Todas as estrelas! O portal está aberto! 🌀":"Estrela coletada! ✨";
+   if(score===stars.length)SOM.item();
+  }
+ }
+
+ for(const e of enemies){
+  if(e.morto)continue;
+  e.x+=e.d*e.vel*k+e.p.dx;e.y=e.p.y-e.h;
+  if(e.x<e.p.x||e.x+e.w>e.p.x+e.p.w){e.d*=-1;e.x=Math.max(e.p.x,Math.min(e.p.x+e.p.w-e.w,e.x));}
+  if(player.x<e.x+e.w&&player.x+player.w>e.x&&player.y<e.y+e.h&&player.y+player.h>e.y){
+   if(player.vy>1&&oldY+player.h<e.y+10){
+    e.morto=true;player.vy=-8;SOM.golpe();
+    for(let i=0;i<12;i++)parts.push({x:e.x+12,y:e.y+14,vx:(Math.random()-.5)*5,vy:-Math.random()*3,v:1,c:"#e36b91"});
+   }else if(player.inv<=0){loseLife();return}
+  }
+ }
+
+ // cometas caindo do céu
+ const F=FASES[fase];
+ if(F.cometas){
+  timerCometa-=k/60;
+  if(timerCometa<=0){timerCometa=F.cometas*(0.6+Math.random()*0.8);cometas.push({x:40+Math.random()*720,y:-30,aviso:1.1,vy:0});}
+  for(const c of cometas){
+   if(c.aviso>0){c.aviso-=k/60;continue;}
+   c.vy+=0.25*k;c.y+=c.vy*k;
+   if(player.inv<=0&&Math.abs(player.x+12-c.x)<18&&Math.abs(player.y+16-c.y)<20){c.fim=true;loseLife();if(!running)return;}
+   if(c.y>460&&!c.fim){c.fim=true;SOM.ruido(0.2,0.08,500);for(let i=0;i<8;i++)parts.push({x:c.x,y:450,vx:(Math.random()-.5)*4,vy:-Math.random()*4,v:1,c:"#ffb02e"});}
+  }
+  cometas=cometas.filter(c=>!c.fim);
+ }
+
+ if(player.x+player.w>portal.x-15&&player.x<portal.x+15&&player.y+player.h>portal.y-27&&player.y<portal.y+27){
+  if(score===stars.length){
+   running=false;
+   if(fase<FASES.length-1){
+    message.textContent="Fase "+(fase+1)+" completa! 🌟";SOM.fase();
+    setTimeout(()=>carregar(fase+1),1300);
+   }else{
+    won=true;message.textContent="Você venceu todas as fases! 🌟 Toque em recomeçar para jogar novamente.";SOM.vitoria();
+   }
+  }else{
+   message.textContent="Ainda faltam "+(stars.length-score)+" estrelas!";
+   player.x=portal.x-60;
+  }
+ }
+}
+
+function draw(){
+ const F=FASES[fase];
+ const g=ctx.createLinearGradient(0,0,0,450);
+ g.addColorStop(0,F.ceu[0]);g.addColorStop(1,F.ceu[1]);
+ ctx.fillStyle=g;ctx.fillRect(0,0,800,450);
+
+ for(let i=0;i<65;i++){
+  ctx.fillStyle="#fff5c9";
+  ctx.globalAlpha=.4+(Math.sin(frame*.04+i)*.3+.3);
+  ctx.fillRect((i*137)%800,(i*61)%260,2,2);
+ }
+ ctx.globalAlpha=1;
+
+ ctx.fillStyle="#f7efc4";
+ ctx.beginPath();ctx.arc(690,70,30,0,7);ctx.fill();
+ ctx.fillStyle="rgba(0,0,0,.08)";ctx.beginPath();ctx.arc(680,62,6,0,7);ctx.arc(700,80,4,0,7);ctx.fill();
+
+ for(const p of platforms){
+  ctx.fillStyle=p.m?"#3b2f6b":"#25375b";ctx.fillRect(p.x,p.y,p.w,p.h);
+  ctx.fillStyle=p.m?"#c4b5ff":"#6ce0be";ctx.fillRect(p.x,p.y,p.w,6);
+ }
+ for(const s of stars){
+  if(s.t)continue;
+  const b=Math.sin(frame*0.08+s.x)*3;
+  ctx.fillStyle="rgba(255,228,123,.25)";ctx.beginPath();ctx.arc(s.x,s.y+b,16,0,7);ctx.fill();
+  ctx.fillStyle="#ffe47b";ctx.font="25px Arial";
+  ctx.fillText("★",s.x-12,s.y+9+b);
+ }
+ // Portal (gira e acende quando todas as estrelas foram pegas)
+ const aberto=score===stars.length;
+ ctx.save();ctx.translate(portal.x,portal.y);
+ if(aberto){ctx.fillStyle="rgba(196,181,255,.35)";ctx.beginPath();ctx.ellipse(0,0,15,27,0,0,7);ctx.fill();}
+ ctx.strokeStyle=aberto?"#c4b5ff":"#55557a";ctx.lineWidth=5;
+ ctx.beginPath();ctx.ellipse(0,0,15,27,0,0,7);ctx.stroke();
+ if(aberto){ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,0,8*Math.abs(Math.sin(frame*.05)),18,0,0,7);ctx.stroke();}
+ ctx.restore();
+
+ for(const e of enemies){
+  if(e.morto)continue;
+  const pul=Math.abs(Math.sin(frame*.15))*2;
+  ctx.fillStyle="#e36b91";
+  ctx.fillRect(e.x,e.y+pul,e.w,e.h-pul);
+  ctx.fillStyle="white";
+  ctx.fillRect(e.x+5,e.y+6+pul,4,5);
+  ctx.fillRect(e.x+15,e.y+6+pul,4,5);
+ }
+ for(const c of cometas){
+  if(c.aviso>0){
+   ctx.fillStyle="rgba(255,90,60,"+(0.3+0.3*Math.sin(frame*.5))+")";
+   ctx.beginPath();ctx.moveTo(c.x,8);ctx.lineTo(c.x-8,22);ctx.lineTo(c.x+8,22);ctx.fill();
+   continue;
+  }
+  ctx.fillStyle="rgba(255,160,60,.4)";ctx.beginPath();ctx.moveTo(c.x-7,c.y);ctx.lineTo(c.x,c.y-40);ctx.lineTo(c.x+7,c.y);ctx.fill();
+  ctx.fillStyle="#ffcc66";ctx.beginPath();ctx.arc(c.x,c.y,9,0,7);ctx.fill();
+  ctx.fillStyle="#ff7a1a";ctx.beginPath();ctx.arc(c.x,c.y,5,0,7);ctx.fill();
+ }
+ for(const p of parts){ctx.globalAlpha=Math.max(0,p.v);ctx.fillStyle=p.c;ctx.fillRect(p.x,p.y,3,3);}
+ ctx.globalAlpha=1;
+ if(player&&(player.inv===0||Math.floor(frame)%8<4)){
+  ctx.fillStyle="#5be2d1";
+  ctx.fillRect(player.x,player.y+8,player.w,player.h-8);
+  ctx.fillStyle="#ffcf7d";
+  ctx.fillRect(player.x+3,player.y,player.w-6,19);
+  ctx.fillStyle="#17203b";
+  const o=player.olha>0?1:-1;
+  ctx.fillRect(player.x+6+o,player.y+7,4,5);
+  ctx.fillRect(player.x+16+o,player.y+7,4,5);
+ }
+}
+
+let ultimo=0;
+function loop(t){
+ const k=Math.min(2,((t-ultimo)/16.67)||1);ultimo=t;
+ update(k);draw();requestAnimationFrame(loop);
+}
+
+document.getElementById("start").onclick=e=>{e.currentTarget.blur();reset();};
+function segurar(id,tecla){
+ const b=document.getElementById(id);
+ b.addEventListener("pointerdown",e=>{e.preventDefault();keys[tecla]=true;if(b.setPointerCapture)b.setPointerCapture(e.pointerId);});
+ ["pointerup","pointercancel","lostpointercapture"].forEach(ev=>b.addEventListener(ev,()=>keys[tecla]=false));
+}
+segurar("left","left");segurar("right","right");
+document.getElementById("jump").addEventListener("pointerdown",e=>{e.preventDefault();jump();});
+
+document.addEventListener("keydown",e=>{
+ if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))e.preventDefault();
+ if(e.key==="ArrowLeft"||e.key==="a")keys.left=true;
+ if(e.key==="ArrowRight"||e.key==="d")keys.right=true;
+ if((e.key==="ArrowUp"||e.key===" "||e.key==="w")&&!e.repeat)jump();
+});
+document.addEventListener("keyup",e=>{
+ if(e.key==="ArrowLeft"||e.key==="a")keys.left=false;
+ if(e.key==="ArrowRight"||e.key==="d")keys.right=false;
+});
+window.addEventListener("blur",()=>keys.left=keys.right=false);
+
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

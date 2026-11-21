@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Catch the Stars Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090615;
+      --painel: #160e2e;
+      --borda: #2f1d5e;
+      --ciano: #2ee6ff;
+      --rosa: #ff3fa4;
+      --amarelo: #ffd23f;
+      --verde: #4dff7a;
+      --vermelho: #ff4757;
+      --pixel: "Press Start 2P", monospace;
+      --leitura: "VT323", monospace;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: #fff;
+      font-family: var(--pixel);
+      touch-action: none;
+    }
+    #jogo-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: max(8px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
+      background: radial-gradient(circle at 50% 20%, #1c1142 0%, var(--bg) 85%);
+    }
+
+    /* ---------- HUD SUPERIOR ---------- */
+    .hud {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(22, 14, 46, 0.92);
+      border: 2px solid var(--borda);
+      border-radius: 12px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 10px rgba(46, 230, 255, 0.15);
+      z-index: 10;
+      flex-shrink: 0;
+    }
+    .hud-linha1 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .hud-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: #bfaaff;
+    }
+    .hud-valor {
+      color: var(--amarelo);
+      font-size: 12px;
+    }
+    .combo-badge {
+      display: inline-block;
+      font-size: 9px;
+      color: var(--ciano);
+      background: rgba(46, 230, 255, 0.15);
+      border: 1px solid var(--ciano);
+      padding: 1px 4px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .combo-ativo { opacity: 1; }
+    .vidas-box {
+      display: flex;
+      gap: 3px;
+      font-size: 13px;
+    }
+    .vida-coracao {
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    .vida-perdida {
+      opacity: 0.2;
+      filter: grayscale(1);
+    }
+    .escudo-badge {
+      display: none;
+      font-size: 8px;
+      color: var(--ciano);
+      background: rgba(46, 230, 255, 0.2);
+      border: 1px solid var(--ciano);
+      border-radius: 4px;
+      padding: 2px 6px;
+      animation: pulso 1s infinite alternate;
+    }
+    .escudo-badge.ativo { display: inline-block; }
+    @keyframes pulso {
+      from { box-shadow: 0 0 4px var(--ciano); }
+      to { box-shadow: 0 0 12px var(--ciano); }
+    }
+
+    /* Barra de progresso da missão */
+    .progresso-wrap {
+      width: 100%;
+      height: 8px;
+      background: #0d0822;
+      border: 1px solid var(--borda);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progresso-barra {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--ciano), var(--amarelo), var(--verde));
+      transition: width 0.3s;
+    }
+
+    /* ---------- ÁREA DO CANVAS ---------- */
+    .area-canvas {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      flex: 1;
+      min-height: 0;
+      margin: 6px 0;
+      border: 2px solid var(--borda);
+      border-radius: 16px;
+      overflow: hidden;
+      background: #05030d;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 0 20px rgba(77, 255, 122, 0.1);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ---------- CONTROLES TÁTEIS INFERIORES ---------- */
+    .controles {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .btn-controle {
+      flex: 1;
+      padding: 14px 10px;
+      font-family: var(--pixel);
+      font-size: 14px;
+      color: var(--ciano);
+      background: rgba(22, 14, 46, 0.9);
+      border: 2px solid rgba(46, 230, 255, 0.4);
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 0 10px rgba(46, 230, 255, 0.1);
+      transition: background 0.1s, transform 0.08s, box-shadow 0.1s;
+      touch-action: none;
+    }
+    .btn-controle:active, .btn-controle.pressionado {
+      background: var(--ciano);
+      color: #0b061a;
+      transform: scale(0.96);
+      box-shadow: 0 0 16px var(--ciano);
+    }
+    .dica-controles {
+      font-size: 8px;
+      color: #7b6ba8;
+      text-align: center;
+      margin-top: 2px;
+    }
+
+    /* ---------- TELAS SOBREPOSTAS (MENU, DERROTA, VITÓRIA) ---------- */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 6, 21, 0.92);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      z-index: 20;
+      transition: opacity 0.25s;
+    }
+    .overlay.oculto {
+      display: none !important;
+    }
+    .icone-missao {
+      font-size: 38px;
+      margin-bottom: 12px;
+      animation: flutuar 2s ease-in-out infinite alternate;
+    }
+    @keyframes flutuar {
+      from { transform: translateY(0px) scale(1); }
+      to { transform: translateY(-8px) scale(1.05); }
+    }
+    .overlay-titulo {
+      font-size: clamp(14px, 4.5vw, 20px);
+      color: var(--amarelo);
+      text-shadow: 2px 2px 0 var(--rosa);
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .overlay-titulo.vitoria {
+      color: var(--verde);
+      text-shadow: 2px 2px 0 #0d5c2e, 0 0 15px rgba(77, 255, 122, 0.6);
+    }
+    .overlay-titulo.derrota {
+      color: var(--vermelho);
+      text-shadow: 2px 2px 0 #5c0d17;
+    }
+    .overlay-texto {
+      font-family: var(--leitura);
+      font-size: 20px;
+      line-height: 1.35;
+      color: #d1c5f0;
+      max-width: 340px;
+      margin-bottom: 18px;
+    }
+    .overlay-meta {
+      background: rgba(255, 210, 63, 0.1);
+      border: 1px dashed var(--amarelo);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 9px;
+      color: var(--amarelo);
+      margin-bottom: 18px;
+    }
+    .btn-acao {
+      width: 100%;
+      max-width: 280px;
+      padding: 14px 20px;
+      font-family: var(--pixel);
+      font-size: 11px;
+      color: #0b061a;
+      background: var(--amarelo);
+      border: 3px solid #000;
+      box-shadow: 0 4px 0 #9e7a00, 0 0 15px rgba(255, 210, 63, 0.5);
+      border-radius: 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: transform 0.1s, background 0.1s;
+    }
+    .btn-acao:hover { background: #ffe072; }
+    .btn-acao:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #9e7a00;
+    }
+    .btn-acao.vitoria {
+      background: var(--verde);
+      box-shadow: 0 4px 0 #288c42, 0 0 15px rgba(77, 255, 122, 0.6);
+    }
+
+    /* Banner temporário de Fase */
+    #banner-fase {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      background: rgba(22, 14, 46, 0.95);
+      border: 3px solid var(--amarelo);
+      box-shadow: 0 0 25px var(--amarelo);
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      color: var(--amarelo);
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 15;
+    }
+    .objetivo-linha { display:flex; justify-content:space-between; gap:8px; font-size:8px; color:#bfaaff; min-height:10px; }
+    #powerDisplay { color: var(--verde); white-space: nowrap; }
+    #banner-fase small { display:block; margin-top:8px; color:#fff; line-height:1.5; }
+    #banner-fase.visivel {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  </style>
+</head>
+<body>
+
+<div id="jogo-container">
+
+  <!-- HUD SUPERIOR -->
+  <header class="hud">
+    <div class="hud-linha1">
+      <div class="hud-item">
+        <span>⭐</span>
+        <span class="hud-valor" id="scoreDisplay">0</span>
+        <span class="combo-badge" id="comboDisplay">x1</span>
+      </div>
+      <div id="shieldIndicator" class="escudo-badge">🛡️ ESCUDO</div>
+      <div class="hud-item">
+        <span style="font-size:9px; color:#9582c7;">FASE</span>
+        <span class="hud-valor" style="color:var(--verde);" id="faseDisplay">1/12</span>
+      </div>
+      <div class="hud-item">
+        <div class="vidas-box" id="livesDisplay">
+          <span class="vida-coracao">❤️</span>
+          <span class="vida-coracao">❤️</span>
+          <span class="vida-coracao">❤️</span>
+        </div>
+      </div>
+    </div>
+    <!-- Barra de progresso para ZERAR -->
+    <div class="progresso-wrap" title="Progresso até zerar o jogo">
+      <div class="progresso-barra" id="progressoBarra"></div>
+    </div>
+    <div class="objetivo-linha"><span id="objetivoTexto"></span><span id="powerDisplay"></span></div>
+  </header>
+
+  <!-- ÁREA DE JOGO (CANVAS) -->
+  <main class="area-canvas" id="areaCanvas">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Banner de nova Fase -->
+    <div id="banner-fase">FASE 1</div>
+
+    <!-- TELA INICIAL (COMEÇO) -->
+    <div class="overlay" id="telaMenu">
+      <div class="icone-missao">🚀</div>
+      <h1 class="overlay-titulo">CATCH THE STARS<br>ARCADE</h1>
+      <p class="overlay-texto">
+        Pilote sua nave, capture estrelas cósmicas e desvie dos meteoros! Pegue ⚡ energia para atacar os chefões e use os power-ups 🧲 ⏳ 🚀 ❤️.
+      </p>
+      <div class="overlay-meta">
+        🎯 12 FASES COM MISSÕES DIFERENTES E 3 CHEFÕES!
+      </div>
+      <button class="btn-acao" id="btnIniciar">▶ INICIAR MISSÃO</button>
+      <div class="overlay-meta" id="recordeMenu" style="margin:14px 0 0;border-style:solid;color:#bfaaff;border-color:#2f1d5e"></div>
+    </div>
+
+    <!-- TELA DE DERROTA (GAME OVER) -->
+    <div class="overlay oculto" id="telaGameOver">
+      <div class="icone-missao">💥</div>
+      <h2 class="overlay-titulo derrota">MISSÃO ABORTADA</h2>
+      <p class="overlay-texto" id="textoGameOver">
+        Sua nave foi atingida e ficou sem energia.
+      </p>
+      <button class="btn-acao" id="btnContinuar">▶ CONTINUAR</button>
+      <button class="btn-acao" id="btnTentarNovamente" style="margin-top:10px;background:#bfaaff;box-shadow:0 4px 0 #5a4a8a">↺ DESDE A FASE 1</button>
+    </div>
+
+    <!-- TELA DE VITÓRIA (ZEROU O JOGO!) -->
+    <div class="overlay oculto" id="telaVitoria">
+      <div class="icone-missao">🏆</div>
+      <h2 class="overlay-titulo vitoria">VOCÊ ZEROU O JOGO!</h2>
+      <p class="overlay-texto" id="textoVitoria">
+        Parabéns, Comandante!
+      </p>
+      <button class="btn-acao vitoria" id="btnJogarNovamente">★ JOGAR NOVAMENTE</button>
+    </div>
+  </main>
+
+  <!-- CONTROLES TÁTEIS RESPONSIVOS -->
+  <footer class="controles">
+    <button class="btn-controle" id="btnEsquerda" aria-label="Mover para a esquerda">
+      <span>◀</span> ESQUERDA
+    </button>
+    <button class="btn-controle" id="btnDireita" aria-label="Mover para a direita">
+      DIREITA <span>▶</span>
+    </button>
+  </footer>
+  <div class="dica-controles">Arraste no jogo, use os botões ou as setas [◀ ▶]</div>
+
+</div>
+
+<script>
+(() => {
+  // ================== 12 FASES, 3 CHEFÕES ==================
+  // obj.tipo: estrelas | cristais | pontos | tempo | chefe
+  const FASES = [
+    { nome: 'ROTA ESTELAR', obj: { tipo: 'estrelas', n: 15 }, vel: 150, rate: 0.75,
+      mix: { star: 55, crystal: 14, shield: 7, power: 4, meteor: 20 } },
+    { nome: 'CHUVA DE METEOROS', obj: { tipo: 'pontos', n: 300 }, vel: 175, rate: 0.62,
+      mix: { star: 34, crystal: 14, orb: 5, shield: 6, power: 5, meteor: 26, fireMeteor: 10 } },
+    { nome: 'CAÇA AOS CRISTAIS', obj: { tipo: 'cristais', n: 8 }, vel: 180, rate: 0.6,
+      mix: { star: 22, crystal: 18, shield: 6, power: 6, meteor: 22, fireMeteor: 12, satellite: 14 } },
+    { nome: 'CHEFÃO: NAVE-MÃE ALIEN', obj: { tipo: 'chefe' }, chefe: 'nave', hp: 10, vel: 165, rate: 1.1,
+      mix: { star: 45, crystal: 10, shield: 12, power: 8, meteor: 25 } },
+    { nome: 'CAMPO DE ASTEROIDES', obj: { tipo: 'tempo', n: 35 }, especial: 'paredes', vel: 170, rate: 1.4,
+      mix: { star: 50, crystal: 25, shield: 12, power: 13 } },
+    { nome: 'NEBULOSA ESCURA', obj: { tipo: 'estrelas', n: 20 }, especial: 'escuro', vel: 165, rate: 0.55,
+      mix: { star: 46, crystal: 10, shield: 6, power: 6, meteor: 24, fireMeteor: 8 } },
+    { nome: 'ZONA DE LASERS', obj: { tipo: 'pontos', n: 500 }, especial: 'lasers', vel: 185, rate: 0.62,
+      mix: { star: 36, crystal: 16, orb: 8, shield: 7, power: 6, meteor: 18, satellite: 9 } },
+    { nome: 'CHEFÃO: POLVO GALÁCTICO', obj: { tipo: 'chefe' }, chefe: 'polvo', hp: 15, vel: 175, rate: 1.0,
+      mix: { star: 45, crystal: 12, shield: 12, power: 8, meteor: 23 } },
+    { nome: 'TEMPESTADE SOLAR', obj: { tipo: 'estrelas', n: 25 }, especial: 'vento', vel: 185, rate: 0.55,
+      mix: { star: 42, crystal: 12, orb: 6, shield: 7, power: 6, meteor: 15, fireMeteor: 12 } },
+    { nome: 'BURACO NEGRO', obj: { tipo: 'tempo', n: 40 }, especial: 'buraco', vel: 190, rate: 0.5,
+      mix: { star: 32, crystal: 14, orb: 10, shield: 8, power: 6, fireMeteor: 16, satellite: 14 } },
+    { nome: 'COMETAS GIGANTES', obj: { tipo: 'pontos', n: 700 }, especial: 'gigantes', vel: 200, rate: 0.55,
+      mix: { star: 32, crystal: 16, orb: 10, shield: 8, power: 7, meteor: 12, fireMeteor: 15 } },
+    { nome: 'CHEFÃO FINAL: REI DOS METEOROS', obj: { tipo: 'chefe' }, chefe: 'rei', hp: 22, especial: 'lasers', vel: 185, rate: 0.95,
+      mix: { star: 42, crystal: 12, shield: 14, power: 10, meteor: 22 } },
+  ];
+  const COMBO_MAX = 5;
+  const VIDAS_MAX = 5;
+  const PERIGOS = new Set(['meteor', 'fireMeteor', 'satellite', 'bala', 'gigante', 'parede']);
+  const POWERS = ['ima', 'lento', 'tiro', 'vida'];
+  const POWER_ICONE = { ima: '🧲', lento: '⏳', tiro: '🚀', vida: '❤️' };
+  const POWER_NOME = { ima: 'ÍMÃ', lento: 'CÂMERA LENTA', tiro: 'MÍSSEIS', vida: '+1 VIDA' };
+
+  // ================== SOM (Web Audio) ==================
+  let audioCtx = null;
+  let mudo = false;
+  try { mudo = localStorage.getItem('fliperama-mudo') === '1'; } catch (e) {}
+  function getAudio() {
+    if (!audioCtx) {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (C) audioCtx = new C();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function tom(f, d, tipo = 'square', vol = 0.12, f2 = null, atraso = 0) {
+    const c = getAudio(); if (!c || mudo) return;
+    const t = c.currentTime + atraso;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = tipo; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + d);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + d + 0.02);
+  }
+  function playSound(tipo) {
+    switch (tipo) {
+      case 'star': tom(520, 0.1, 'sine', 0.12, 1040); break;
+      case 'crystal': tom(660, 0.14, 'triangle', 0.15, 1320); break;
+      case 'orb': tom(440, 0.08, 'sine', 0.18, 880); tom(880, 0.14, 'sine', 0.15, 1760, 0.08); break;
+      case 'shield': tom(320, 0.25, 'sine', 0.2, 960); break;
+      case 'power': [523, 784, 1047].forEach((f, i) => tom(f, 0.1, 'square', 0.09, null, i * 0.06)); break;
+      case 'hit': tom(160, 0.22, 'sawtooth', 0.25, 40); break;
+      case 'missil': tom(900, 0.12, 'square', 0.05, 300); break;
+      case 'bossHit': tom(200, 0.15, 'square', 0.15, 90); break;
+      case 'laserAviso': tom(1200, 0.08, 'square', 0.04); break;
+      case 'laser': tom(110, 0.5, 'sawtooth', 0.12, 60); break;
+      case 'boss': [220, 196, 175, 147].forEach((f, i) => tom(f, 0.22, 'sawtooth', 0.12, null, i * 0.18)); break;
+      case 'fase': [440, 554, 659, 880].forEach((f, i) => tom(f, 0.08, 'square', 0.1, null, i * 0.08)); break;
+      case 'clear': [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tom(f, 0.12, 'triangle', 0.16, null, i * 0.09)); break;
+      case 'victory': [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tom(f, i === 5 ? 0.7 : 0.18, 'triangle', 0.2, null, i * 0.11)); break;
+      case 'gameover': tom(260, 0.6, 'sawtooth', 0.25, 50); break;
+    }
+  }
+
+  // ================== DOM ==================
+  const $ = id => document.getElementById(id);
+  const canvas = $('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreDisplay = $('scoreDisplay'), comboDisplay = $('comboDisplay'), livesDisplay = $('livesDisplay');
+  const shieldIndicator = $('shieldIndicator'), progressoBarra = $('progressoBarra'), bannerFase = $('banner-fase');
+  const faseDisplay = $('faseDisplay'), objetivoTexto = $('objetivoTexto'), powerDisplay = $('powerDisplay');
+  const telaMenu = $('telaMenu'), telaGameOver = $('telaGameOver'), telaVitoria = $('telaVitoria');
+  const textoGameOver = $('textoGameOver'), textoVitoria = $('textoVitoria'), recordeMenu = $('recordeMenu');
+  const btnContinuar = $('btnContinuar');
+
+  let W = 360, H = 500;
+  function resizeCanvas() {
+    const parent = canvas.parentElement;
+    W = parent.clientWidth || 360;
+    H = parent.clientHeight || 500;
+    canvas.width = W; canvas.height = H;
+    player.y = H - player.height - 14;
+    if (player.x > W - player.width) player.x = W - player.width;
+  }
+
+  // ================== ESTADO ==================
+  let estado = 'MENU'; // MENU, PLAYING, INTERVALO, GAMEOVER, VICTORY
+  let score = 0, scoreInicioFase = 0, lives = 3, combo = 1, comboT = 0, hasShield = false;
+  let faseIdx = 0, fase = FASES[0];
+  let progresso = 0, tempoFase = 0, spawnTimer = 0, intervaloT = 0;
+  let efeitos = { ima: 0, lento: 0, tiro: 0 };
+  let invT = 0, tremor = 0, tiroCD = 0;
+  let boss = null, lasers = [], laserT = 0, paredeT = 0, gapX = 150;
+  let entities = [], particles = [], floatingTexts = [], misseis = [];
+  let starsBgFar = [], starsBgNear = [];
+  let recorde = 0, melhorFase = 1;
+  try { recorde = +localStorage.getItem('catch-stars-recorde') || 0; melhorFase = +localStorage.getItem('catch-stars-fase') || 1; } catch (e) {}
+
+  const player = { x: 150, y: 400, width: 44, height: 44, speed: 380, targetX: null };
+
+  function initStars() {
+    starsBgFar = []; starsBgNear = [];
+    for (let i = 0; i < 40; i++) starsBgFar.push({ x: Math.random() * W, y: Math.random() * H, size: Math.random() * 1.5 + 0.6, speed: 35 });
+    for (let i = 0; i < 24; i++) starsBgNear.push({ x: Math.random() * W, y: Math.random() * H, size: Math.random() * 2.2 + 1.2, speed: 80 });
+  }
+
+  // ================== CONTROLES ==================
+  const keys = { left: false, right: false };
+  window.addEventListener('keydown', e => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
+    const k = e.key.toLowerCase();
+    if (k === 'arrowleft' || k === 'a') { keys.left = true; player.targetX = null; }
+    if (k === 'arrowright' || k === 'd') { keys.right = true; player.targetX = null; }
+    if (k === 'm') { mudo = !mudo; try { localStorage.setItem('fliperama-mudo', mudo ? '1' : '0'); } catch (er) {} }
+    if ((e.key === ' ' || e.key === 'Enter') && (estado === 'MENU' || estado === 'VICTORY')) iniciarJogo(0);
+    else if ((e.key === ' ' || e.key === 'Enter') && estado === 'GAMEOVER') continuar();
+  });
+  window.addEventListener('keyup', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'arrowleft' || k === 'a') keys.left = false;
+    if (k === 'arrowright' || k === 'd') keys.right = false;
+  });
+  window.addEventListener('blur', () => { keys.left = keys.right = false; });
+
+  function setupBotaoControle(botao, direcao) {
+    const start = e => {
+      e.preventDefault(); e.stopPropagation(); getAudio();
+      keys[direcao] = true; player.targetX = null;
+      botao.classList.add('pressionado');
+      if (navigator.vibrate) navigator.vibrate(8);
+    };
+    const end = e => { e.preventDefault(); keys[direcao] = false; botao.classList.remove('pressionado'); };
+    botao.addEventListener('pointerdown', start);
+    botao.addEventListener('pointerup', end);
+    botao.addEventListener('pointercancel', end);
+    botao.addEventListener('pointerleave', end);
+  }
+  setupBotaoControle($('btnEsquerda'), 'left');
+  setupBotaoControle($('btnDireita'), 'right');
+
+  function setPlayerTarget(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    player.targetX = Math.max(0, Math.min(W - player.width, clientX - rect.left - player.width / 2));
+  }
+  canvas.addEventListener('pointerdown', e => {
+    getAudio();
+    if (estado !== 'PLAYING' && estado !== 'INTERVALO') return;
+    setPlayerTarget(e.clientX);
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (estado !== 'PLAYING' && estado !== 'INTERVALO') return;
+    if (e.buttons > 0 || e.pointerType === 'touch') setPlayerTarget(e.clientX);
+  });
+
+  // ================== UI ==================
+  function updateLivesUI() {
+    livesDisplay.innerHTML = '';
+    const total = Math.max(3, lives);
+    for (let i = 0; i < total; i++) {
+      const sp = document.createElement('span');
+      sp.className = 'vida-coracao' + (i >= lives ? ' vida-perdida' : '');
+      sp.textContent = '❤️';
+      livesDisplay.appendChild(sp);
+    }
+    shieldIndicator.classList.toggle('ativo', hasShield);
+  }
+  function textoObjetivo() {
+    const o = fase.obj;
+    if (o.tipo === 'estrelas') return `⭐ PEGUE ${o.n} ESTRELAS: ${Math.min(progresso, o.n)}/${o.n}`;
+    if (o.tipo === 'cristais') return `💎 PEGUE ${o.n} CRISTAIS: ${Math.min(progresso, o.n)}/${o.n}`;
+    if (o.tipo === 'pontos') return `🎯 FAÇA ${o.n} PONTOS: ${Math.min(progresso, o.n)}/${o.n}`;
+    if (o.tipo === 'tempo') return `⏱ SOBREVIVA: ${Math.max(0, Math.ceil(o.n - tempoFase))}s`;
+    return `👾 PEGUE ⚡ ENERGIA PARA ATACAR! VIDA: ${boss ? boss.hp : 0}`;
+  }
+  function fracaoFase() {
+    const o = fase.obj;
+    if (o.tipo === 'tempo') return tempoFase / o.n;
+    if (o.tipo === 'chefe') return boss ? 1 - boss.hp / boss.hpMax : 1;
+    return progresso / o.n;
+  }
+  let ultimoObj = '';
+  function atualizarHUD() {
+    const t = textoObjetivo();
+    if (t !== ultimoObj) { objetivoTexto.textContent = t; ultimoObj = t; }
+    progressoBarra.style.width = Math.min(100, fracaoFase() * 100) + '%';
+    const ativos = Object.keys(efeitos).filter(k => efeitos[k] > 0).map(k => POWER_ICONE[k] + Math.ceil(efeitos[k]));
+    const p = ativos.join(' ');
+    if (powerDisplay.textContent !== p) powerDisplay.textContent = p;
+  }
+  function addCombo() {
+    combo = Math.min(COMBO_MAX, combo + 1);
+    comboT = 2.8;
+    comboDisplay.textContent = `x${combo}`;
+    comboDisplay.classList.add('combo-ativo');
+  }
+  let bannerTimer = null;
+  function mostrarBannerFase(texto, som = 'fase') {
+    bannerFase.innerHTML = texto;
+    bannerFase.classList.add('visivel');
+    playSound(som);
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => bannerFase.classList.remove('visivel'), 2000);
+  }
+  function salvarRecorde() {
+    if (score > recorde) recorde = score;
+    if (faseIdx + 1 > melhorFase) melhorFase = faseIdx + 1;
+    try { localStorage.setItem('catch-stars-recorde', recorde); localStorage.setItem('catch-stars-fase', melhorFase); } catch (e) {}
+  }
+  function mostrarRecordeMenu() {
+    recordeMenu.textContent = recorde > 0 ? `🏅 RECORDE: ${recorde} PTS • MELHOR FASE: ${melhorFase}/12` : '';
+  }
+
+  // ================== FLUXO ==================
+  function iniciarJogo(idx) {
+    getAudio();
+    score = 0; lives = 3;
+    comecarFase(idx || 0);
+  }
+  function continuar() {
+    score = scoreInicioFase; lives = 3;
+    comecarFase(faseIdx);
+  }
+  function comecarFase(idx) {
+    faseIdx = idx; fase = FASES[idx];
+    scoreInicioFase = score;
+    combo = 1; comboT = 0; hasShield = false;
+    progresso = 0; tempoFase = 0; spawnTimer = 0;
+    efeitos = { ima: 0, lento: 0, tiro: 0 };
+    entities = []; misseis = []; lasers = []; laserT = 2.5; paredeT = 0.5;
+    invT = 1.2;
+    resizeCanvas();
+    if (estado !== 'INTERVALO') { player.x = W / 2 - player.width / 2; player.targetX = null; }
+    gapX = W / 2 - 50;
+    boss = fase.chefe ? { tipo: fase.chefe, hp: fase.hp, hpMax: fase.hp, x: W / 2 - 60, y: -90, w: 120, h: 70, dir: 1, atkT: 2, energiaT: 2.5, flash: 0, entrada: true, padrao: 0 } : null;
+    scoreDisplay.textContent = score;
+    comboDisplay.classList.remove('combo-ativo');
+    faseDisplay.textContent = `${idx + 1}/12`;
+    updateLivesUI();
+    telaMenu.classList.add('oculto'); telaGameOver.classList.add('oculto'); telaVitoria.classList.add('oculto');
+    estado = 'PLAYING';
+    mostrarBannerFase(`FASE ${idx + 1}<br><small style="font-size:10px">${fase.nome}</small>`, boss ? 'boss' : 'fase');
+    ultimoObj = '';
+    atualizarHUD();
+  }
+  function faseCompleta() {
+    const bonus = 50 + faseIdx * 25 + lives * 20;
+    score += bonus;
+    scoreDisplay.textContent = score;
+    salvarRecorde();
+    if (fase.chefe && lives < VIDAS_MAX) { lives++; updateLivesUI(); }
+    for (let i = 0; i < 40; i++) createParticles(W / 2, H / 3, ['#ffd23f', '#2ee6ff', '#4dff7a', '#ff3fa4'][i % 4], 2);
+    // transforma os perigos em faíscas
+    entities.forEach(e => createParticles(e.x + e.width / 2, e.y + e.height / 2, '#2ee6ff', 4));
+    entities = []; lasers = []; misseis = []; boss = null;
+    if (faseIdx >= FASES.length - 1) { vitoria(); return; }
+    estado = 'INTERVALO'; intervaloT = 2.6;
+    mostrarBannerFase(`FASE ${faseIdx + 1} COMPLETA!<br><small style="font-size:10px">BÔNUS +${bonus}${fase.chefe ? ' • +1 ❤️' : ''}</small>`, 'clear');
+  }
+  function gameOver() {
+    estado = 'GAMEOVER';
+    salvarRecorde();
+    playSound('gameover');
+    textoGameOver.innerHTML = `Pontuação: <strong style="color:var(--amarelo); font-size:22px;">${score}</strong><br>Você chegou à <b>Fase ${faseIdx + 1}: ${fase.nome}</b>.<br><span style="color:#9582c7">Recorde: ${recorde}</span>`;
+    btnContinuar.textContent = `▶ CONTINUAR DA FASE ${faseIdx + 1}`;
+    telaGameOver.classList.remove('oculto');
+  }
+  function vitoria() {
+    estado = 'VICTORY';
+    faseIdx = FASES.length - 1;
+    salvarRecorde();
+    playSound('victory');
+    textoVitoria.innerHTML = `🏆 <b>VOCÊ VENCEU OS 3 CHEFÕES E AS 12 FASES!</b><br>Pontuação final: <strong style="color:var(--amarelo); font-size:24px;">${score}</strong><br><span style="color:#9582c7">Recorde: ${recorde}</span>`;
+    telaVitoria.classList.remove('oculto');
+  }
+
+  $('btnIniciar').addEventListener('click', () => iniciarJogo(0));
+  $('btnTentarNovamente').addEventListener('click', () => iniciarJogo(0));
+  $('btnJogarNovamente').addEventListener('click', () => iniciarJogo(0));
+  btnContinuar.addEventListener('click', continuar);
+
+  // ================== ENTIDADES ==================
+  function sortear(mix) {
+    let total = 0; for (const k in mix) total += mix[k];
+    let r = Math.random() * total;
+    for (const k in mix) { r -= mix[k]; if (r <= 0) return k; }
+    return 'star';
+  }
+  function velBase() { return fase.vel + Math.min(tempoFase * 1.5, 45); }
+  function addEnt(o) {
+    const e = Object.assign({ width: 30, height: 30, vx: 0, angle: 0 }, o);
+    e.startX = e.x;
+    entities.push(e);
+    return e;
+  }
+  function spawnEntity() {
+    let type = sortear(fase.mix);
+    if (type === 'power' && lives >= VIDAS_MAX) type = 'star';
+    let w = 30;
+    if (fase.especial === 'gigantes' && Math.random() < 0.22) { type = 'gigante'; w = 70; }
+    const base = velBase();
+    const sp = type === 'fireMeteor' ? base * 1.4 : type === 'satellite' ? base * 1.1 : type === 'gigante' ? base * 0.7 : base;
+    const e = addEnt({ x: Math.random() * (W - w - 12) + 6, y: -w - 10, width: w, height: w, type, speed: sp });
+    if (type === 'power') {
+      let p = POWERS[Math.floor(Math.random() * POWERS.length)];
+      if (p === 'vida' && Math.random() < 0.5) p = 'ima';
+      e.power = p;
+      e.width = e.height = 32;
+    }
+    if (type === 'fireMeteor' && faseIdx >= 8) e.vx = (Math.random() - 0.5) * 120; // meteoros em diagonal
+  }
+  function spawnParede() {
+    // fileira de asteroides com um vão; o vão anda pouco para ser justo
+    const vao = player.width * 2.6;
+    gapX = Math.max(8, Math.min(W - vao - 8, gapX + (Math.random() - 0.5) * 170));
+    for (let x = 0; x < W; x += 32) {
+      if (x + 30 > gapX && x < gapX + vao) continue;
+      addEnt({ x, y: -40, type: 'parede', speed: velBase(), width: 30, height: 30, angle: Math.random() * 6 });
+    }
+    // estrela no meio do vão
+    addEnt({ x: gapX + vao / 2 - 15, y: -40, type: 'star', speed: velBase() });
+  }
+  function spawnLaser() {
+    const largura = 34;
+    // mira perto do jogador às vezes
+    const x = Math.random() < 0.5 ? player.x + player.width / 2 - largura / 2 + (Math.random() - 0.5) * 60 : Math.random() * (W - largura);
+    lasers.push({ x: Math.max(0, Math.min(W - largura, x)), w: largura, aviso: 1.1, ativo: 0.55, acertou: false });
+    playSound('laserAviso');
+  }
+
+  function createParticles(x, y, color, count = 10) {
+    for (let i = 0; i < count; i++) {
+      particles.push({ x, y, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.5) * 260,
+        radius: Math.random() * 3.5 + 2, color, alpha: 1, decay: Math.random() * 1.2 + 0.8 });
+    }
+  }
+  function addFloatingText(x, y, text, color) { floatingTexts.push({ x, y, text, color, alpha: 1, vy: -60 }); }
+
+  function levarDano(cx, cy) {
+    if (invT > 0) return;
+    if (hasShield) {
+      hasShield = false; invT = 0.6;
+      playSound('hit');
+      createParticles(cx, cy, '#2ee6ff', 18);
+      addFloatingText(cx, cy, 'BLOQUEADO!', '#2ee6ff');
+      updateLivesUI();
+      return;
+    }
+    lives--; combo = 1; invT = 1.3; tremor = 0.35;
+    comboDisplay.classList.remove('combo-ativo');
+    playSound('hit');
+    if (navigator.vibrate) navigator.vibrate(60);
+    createParticles(cx, cy, '#ff4757', 22);
+    addFloatingText(cx, cy, '-1 ❤️', '#ff4757');
+    updateLivesUI();
+    if (lives <= 0) gameOver();
+  }
+  function ganhar(pts, cx, cy, cor) {
+    pts *= combo;
+    score += pts;
+    if (fase.obj.tipo === 'pontos') progresso += pts;
+    addFloatingText(cx, cy, `+${pts}`, cor);
+    addCombo();
+  }
+  function coletar(ent) {
+    const cx = ent.x + ent.width / 2, cy = ent.y + ent.height / 2;
+    switch (ent.type) {
+      case 'star':
+        ganhar(10, cx, cy, '#ffd23f'); playSound('star'); createParticles(cx, cy, '#ffd23f', 10);
+        if (fase.obj.tipo === 'estrelas') progresso++;
+        break;
+      case 'crystal':
+        ganhar(25, cx, cy, '#2ee6ff'); playSound('crystal'); createParticles(cx, cy, '#2ee6ff', 14);
+        if (fase.obj.tipo === 'cristais') progresso++;
+        break;
+      case 'orb':
+        ganhar(50, cx, cy, '#ff3fa4'); playSound('orb'); createParticles(cx, cy, '#ff3fa4', 20);
+        break;
+      case 'shield':
+        hasShield = true; playSound('shield'); createParticles(cx, cy, '#2ee6ff', 16);
+        addFloatingText(cx, cy, 'ESCUDO!', '#2ee6ff'); updateLivesUI();
+        break;
+      case 'power':
+        playSound('power'); createParticles(cx, cy, '#4dff7a', 16);
+        addFloatingText(cx, cy, POWER_NOME[ent.power], '#4dff7a');
+        if (ent.power === 'vida') { lives = Math.min(VIDAS_MAX, lives + 1); updateLivesUI(); }
+        else efeitos[ent.power] = ent.power === 'tiro' ? 5 : 7;
+        break;
+      case 'energia':
+        playSound('missil'); createParticles(cx, cy, '#4dff7a', 12);
+        addFloatingText(cx, cy, 'FOGO!', '#4dff7a');
+        for (let i = -1; i <= 1; i++) misseis.push({ x: player.x + player.width / 2 + i * 10, y: player.y, vx: i * 60, forte: true });
+        break;
+    }
+    scoreDisplay.textContent = score;
+  }
+
+  // ================== CHEFÕES ==================
+  function atualizarBoss(dt) {
+    const b = boss;
+    if (b.entrada) { b.y += 60 * dt; if (b.y >= 34) { b.y = 34; b.entrada = false; } return; }
+    const fur = 1 + (1 - b.hp / b.hpMax) * 0.8; // fica mais bravo com pouca vida
+    b.x += b.dir * (70 + fur * 40) * dt;
+    if (b.x < 6) { b.x = 6; b.dir = 1; }
+    if (b.x > W - b.w - 6) { b.x = W - b.w - 6; b.dir = -1; }
+    if (b.flash > 0) b.flash -= dt;
+    const cx = b.x + b.w / 2, by = b.y + b.h;
+    b.energiaT -= dt;
+    if (b.energiaT <= 0) {
+      b.energiaT = b.tipo === 'rei' ? 2.4 : 2.8;
+      addEnt({ x: Math.random() * (W - 40) + 5, y: -30, type: 'energia', speed: 150, width: 30, height: 30 });
+    }
+    b.atkT -= dt * fur;
+    if (b.atkT > 0) return;
+    const mirar = (vel, desvio = 0) => {
+      const dx = player.x + player.width / 2 - cx, dy = player.y - by;
+      const d = Math.hypot(dx, dy) || 1;
+      const ang = Math.atan2(dy, dx) + desvio;
+      addEnt({ x: cx - 7, y: by, type: 'bala', width: 14, height: 14, speed: Math.sin(ang) * vel, vx: Math.cos(ang) * vel });
+    };
+    if (b.tipo === 'nave') {
+      b.atkT = 1.0;
+      addEnt({ x: cx - 15, y: by, type: 'fireMeteor', speed: 230 });
+      if (b.hp < b.hpMax / 2) mirar(220);
+    } else if (b.tipo === 'polvo') {
+      b.atkT = 1.4;
+      const n = b.hp < b.hpMax / 2 ? 5 : 3;
+      for (let i = 0; i < n; i++) {
+        const ang = Math.PI / 2 + (i - (n - 1) / 2) * 0.32;
+        addEnt({ x: cx - 7, y: by, type: 'bala', width: 14, height: 14, speed: Math.sin(ang) * 210, vx: Math.cos(ang) * 210 });
+      }
+    } else { // rei dos meteoros: alterna padrões
+      b.padrao = (b.padrao + 1) % 3;
+      if (b.padrao === 0) { b.atkT = 1.6; for (let i = 0; i < 4; i++) addEnt({ x: Math.random() * (W - 40), y: -40 - i * 60, type: 'meteor', speed: 220 }); }
+      else if (b.padrao === 1) { b.atkT = 1.2; mirar(240, -0.2); mirar(240); mirar(240, 0.2); }
+      else { b.atkT = 1.4; addEnt({ x: cx - 35, y: by, type: 'gigante', width: 70, height: 70, speed: 170 }); }
+    }
+  }
+  function acertarBoss(m) {
+    const b = boss;
+    if (!b || b.entrada) return false;
+    if (m.x > b.x && m.x < b.x + b.w && m.y > b.y && m.y < b.y + b.h) {
+      b.hp -= m.forte ? 1 / 3 : 0.25; // energia: 3 mísseis = 1 de dano
+      b.hp = Math.max(0, Math.round(b.hp * 100) / 100);
+      b.flash = 0.12;
+      playSound('bossHit');
+      createParticles(m.x, m.y, '#ffd23f', 6);
+      if (b.hp <= 0.01) {
+        for (let i = 0; i < 6; i++) createParticles(b.x + Math.random() * b.w, b.y + Math.random() * b.h, ['#ff3fa4', '#ffd23f', '#2ee6ff'][i % 3], 12);
+        tremor = 0.6;
+        b.hp = 0;
+        faseCompleta();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // ================== UPDATE ==================
+  function update(dt) {
+    const fundoVel = estado === 'INTERVALO' ? 4 : 1;
+    starsBgFar.forEach(s => { s.y += s.speed * dt * fundoVel; if (s.y > H) { s.y = 0; s.x = Math.random() * W; } });
+    starsBgNear.forEach(s => { s.y += s.speed * dt * fundoVel; if (s.y > H) { s.y = 0; s.x = Math.random() * W; } });
+
+    // partículas e textos andam mesmo no intervalo
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.alpha -= p.decay * dt;
+      if (p.alpha <= 0) particles.splice(i, 1);
+    }
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      const ft = floatingTexts[i]; ft.y += ft.vy * dt; ft.alpha -= 1.1 * dt;
+      if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+    }
+    if (tremor > 0) tremor -= dt;
+
+    if (estado !== 'PLAYING' && estado !== 'INTERVALO') return;
+    moverJogador(dt);
+    if (estado === 'INTERVALO') {
+      intervaloT -= dt;
+      if (intervaloT <= 0) comecarFase(faseIdx + 1);
+      return;
+    }
+
+    tempoFase += dt;
+    if (invT > 0) invT -= dt;
+    for (const k in efeitos) if (efeitos[k] > 0) efeitos[k] = Math.max(0, efeitos[k] - dt);
+    if (comboT > 0) { comboT -= dt; if (comboT <= 0) { combo = 1; comboDisplay.classList.remove('combo-ativo'); } }
+    const lento = efeitos.lento > 0 ? 0.5 : 1;
+
+    // spawns
+    spawnTimer += dt * lento;
+    const rate = fase.rate * Math.max(0.7, 1 - tempoFase / 120);
+    if (spawnTimer >= rate) { spawnTimer = 0; spawnEntity(); }
+    if (fase.especial === 'paredes') {
+      paredeT -= dt * lento;
+      if (paredeT <= 0) { paredeT = Math.max(1.15, 1.8 - tempoFase / 50); spawnParede(); }
+    }
+    if (fase.especial === 'lasers') {
+      laserT -= dt * lento;
+      if (laserT <= 0) { laserT = Math.max(1.2, 2.4 - tempoFase / 40); spawnLaser(); }
+    }
+    if (boss) atualizarBoss(dt * lento);
+
+    // efeitos de ambiente
+    if (fase.especial === 'vento') {
+      const vento = Math.sin(tempoFase * 0.6) * 150;
+      player.x += vento * dt;
+      if (player.targetX !== null) player.targetX = Math.max(0, Math.min(W - player.width, player.targetX));
+    }
+    if (fase.especial === 'buraco') {
+      const centro = W / 2 - player.width / 2;
+      player.x += Math.sign(centro - player.x) * Math.min(Math.abs(centro - player.x), 55 * dt);
+    }
+    player.x = Math.max(0, Math.min(W - player.width, player.x));
+
+    // tiro automático (power-up)
+    if (efeitos.tiro > 0) {
+      tiroCD -= dt;
+      if (tiroCD <= 0) { tiroCD = 0.22; misseis.push({ x: player.x + player.width / 2, y: player.y, vx: 0 }); playSound('missil'); }
+    }
+    // mísseis: miram no chefão se houver
+    for (let i = misseis.length - 1; i >= 0; i--) {
+      const m = misseis[i];
+      if (boss && !boss.entrada) {
+        const alvo = boss.x + boss.w / 2;
+        m.vx += Math.sign(alvo - m.x) * 900 * dt;
+        m.vx = Math.max(-260, Math.min(260, m.vx));
+      }
+      m.x += m.vx * dt; m.y -= 560 * dt;
+      let gasto = acertarBoss(m);
+      if (estado !== 'PLAYING') return;
+      if (!gasto) {
+        for (let j = entities.length - 1; j >= 0; j--) {
+          const e = entities[j];
+          if (PERIGOS.has(e.type) && m.x > e.x && m.x < e.x + e.width && m.y > e.y && m.y < e.y + e.height) {
+            createParticles(e.x + e.width / 2, e.y + e.height / 2, '#ff9f43', 8);
+            if (e.type === 'gigante') { e.hp = (e.hp || 3) - 1; if (e.hp > 0) { gasto = true; break; } }
+            score += 5; scoreDisplay.textContent = score;
+            if (fase.obj.tipo === 'pontos') progresso += 5;
+            entities.splice(j, 1); gasto = true; break;
+          }
+        }
+      }
+      if (gasto || m.y < -20) misseis.splice(i, 1);
+    }
+
+    // lasers
+    for (let i = lasers.length - 1; i >= 0; i--) {
+      const L = lasers[i];
+      if (L.aviso > 0) {
+        L.aviso -= dt * lento;
+        if (L.aviso <= 0) { playSound('laser'); tremor = 0.15; }
+        continue;
+      }
+      L.ativo -= dt;
+      const centroX = player.x + player.width / 2;
+      if (!L.acertou && centroX + 12 > L.x && centroX - 12 < L.x + L.w) { L.acertou = true; levarDano(centroX, player.y); if (estado !== 'PLAYING') return; }
+      if (L.ativo <= 0) lasers.splice(i, 1);
+    }
+
+    // entidades
+    const pcx = player.x + player.width / 2, pcy = player.y + player.height / 2;
+    for (let i = entities.length - 1; i >= 0; i--) {
+      const ent = entities[i];
+      ent.y += ent.speed * dt * lento;
+      ent.angle += 2.5 * dt;
+      if (ent.type === 'satellite') {
+        ent.startX += ent.vx * dt * lento;
+        ent.x = ent.startX + Math.sin(ent.y * 0.04) * 55;
+      } else ent.x += ent.vx * dt * lento;
+      if (ent.type === 'fireMeteor' || ent.type === 'gigante') {
+        if (Math.random() < 0.3) particles.push({ x: ent.x + ent.width / 2, y: ent.y, vx: (Math.random() - 0.5) * 30, vy: -40, radius: 2 + Math.random() * 2, color: '#ff9f43', alpha: 0.7, decay: 2.2 });
+      }
+      if (fase.especial === 'buraco') {
+        const alvo = W / 2 - ent.width / 2;
+        if (ent.type === 'satellite') ent.startX += (alvo - ent.startX) * 0.6 * dt;
+        else ent.x += (alvo - ent.x) * 0.6 * dt;
+      }
+      // ímã puxa os coletáveis
+      if (efeitos.ima > 0 && !PERIGOS.has(ent.type)) {
+        const ex = ent.x + ent.width / 2, ey = ent.y + ent.height / 2;
+        const d = Math.hypot(pcx - ex, pcy - ey);
+        if (d < 220) { ent.x += (pcx - ex) / d * 320 * dt; ent.y += (pcy - ey) / d * 200 * dt; }
+      }
+
+      // colisão (perigos têm caixa menor, para ser justo)
+      const enc = PERIGOS.has(ent.type) ? ent.width * 0.18 : -4;
+      const px = player.x + 6, py = player.y + 6, pw = player.width - 12, ph = player.height - 10;
+      if (px < ent.x + ent.width - enc && px + pw > ent.x + enc && py < ent.y + ent.height - enc && py + ph > ent.y + enc) {
+        if (PERIGOS.has(ent.type)) {
+          if (invT > 0) continue;
+          entities.splice(i, 1);
+          levarDano(ent.x + ent.width / 2, ent.y + ent.height / 2);
+          if (estado !== 'PLAYING') return;
+        } else {
+          entities.splice(i, 1);
+          coletar(ent);
+        }
+        continue;
+      }
+      if (ent.y > H + 80 || ent.x < -100 || ent.x > W + 100) entities.splice(i, 1);
+    }
+
+    // fim da fase?
+    const o = fase.obj;
+    if ((o.tipo === 'tempo' && tempoFase >= o.n) || ((o.tipo === 'estrelas' || o.tipo === 'cristais' || o.tipo === 'pontos') && progresso >= o.n)) {
+      faseCompleta();
+    }
+    atualizarHUD();
+  }
+  function moverJogador(dt) {
+    if (player.targetX !== null) {
+      const diff = player.targetX - player.x, step = player.speed * 1.35 * dt;
+      if (Math.abs(diff) <= step) player.x = player.targetX; else player.x += Math.sign(diff) * step;
+    } else {
+      if (keys.left) player.x -= player.speed * dt;
+      if (keys.right) player.x += player.speed * dt;
+    }
+    player.x = Math.max(0, Math.min(W - player.width, player.x));
+  }
+
+  // ================== DESENHO ==================
+  function drawStar(c, cx, cy, spikes, outerRadius, innerRadius) {
+    let rot = Math.PI / 2 * 3; const step = Math.PI / spikes;
+    c.beginPath(); c.moveTo(cx, cy - outerRadius);
+    for (let i = 0; i < spikes; i++) {
+      c.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius); rot += step;
+      c.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius); rot += step;
+    }
+    c.closePath(); c.fill();
+  }
+  function drawPoly(c, cx, cy, radius, sides) {
+    c.beginPath();
+    for (let i = 0; i < sides; i++) {
+      const a = (i * 2 * Math.PI) / sides;
+      const r = radius * (i % 2 ? 0.85 : 1);
+      if (i === 0) c.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); else c.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    }
+    c.closePath(); c.fill(); c.stroke();
+  }
+  const CORES_FUNDO = ['#05030d', '#0a0418', '#04101a', '#12041a', '#0a0a0a', '#020104', '#14030a', '#0b0420', '#1a0a02', '#000000', '#100206', '#0a0010'];
+
+  function desenharEnt(ent) {
+    ctx.save();
+    const cx = ent.x + ent.width / 2, cy = ent.y + ent.height / 2;
+    ctx.translate(cx, cy);
+    const t = performance.now() / 1000;
+    switch (ent.type) {
+      case 'star':
+        ctx.rotate(ent.angle); ctx.fillStyle = '#ffd23f'; ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 10;
+        drawStar(ctx, 0, 0, 5, ent.width / 2, ent.width / 4); break;
+      case 'crystal':
+        ctx.rotate(ent.angle); ctx.fillStyle = '#2ee6ff'; ctx.shadowColor = '#2ee6ff'; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.moveTo(0, -ent.height / 2); ctx.lineTo(ent.width / 2, 0); ctx.lineTo(0, ent.height / 2); ctx.lineTo(-ent.width / 2, 0); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); break;
+      case 'orb':
+        ctx.fillStyle = '#ff3fa4'; ctx.shadowColor = '#ff3fa4'; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.arc(0, 0, ent.width / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(0, 0, ent.width / 4, 0, Math.PI * 2); ctx.fill(); break;
+      case 'shield':
+        ctx.fillStyle = '#2ee6ff'; ctx.beginPath(); ctx.arc(0, 0, ent.width / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#090615'; ctx.lineWidth = 3; ctx.beginPath();
+        ctx.moveTo(-5, 0); ctx.lineTo(5, 0); ctx.moveTo(0, -5); ctx.lineTo(0, 5); ctx.stroke(); break;
+      case 'power':
+        ctx.fillStyle = 'rgba(77,255,122,.18)'; ctx.strokeStyle = '#4dff7a'; ctx.lineWidth = 2;
+        ctx.shadowColor = '#4dff7a'; ctx.shadowBlur = 8 + Math.sin(t * 8) * 4;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-16, -16, 32, 32, 7) : ctx.rect(-16, -16, 32, 32); ctx.fill(); ctx.stroke();
+        ctx.shadowBlur = 0; ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(POWER_ICONE[ent.power], 0, 1); break;
+      case 'energia':
+        ctx.rotate(Math.sin(t * 6) * 0.2);
+        ctx.fillStyle = '#4dff7a'; ctx.shadowColor = '#4dff7a'; ctx.shadowBlur = 16;
+        ctx.beginPath(); ctx.moveTo(4, -15); ctx.lineTo(-8, 2); ctx.lineTo(0, 2); ctx.lineTo(-4, 15); ctx.lineTo(9, -3); ctx.lineTo(1, -3); ctx.closePath(); ctx.fill(); break;
+      case 'meteor': case 'parede':
+        ctx.rotate(ent.angle); ctx.fillStyle = ent.type === 'parede' ? '#6b5b4b' : '#576574'; ctx.strokeStyle = '#222f3e'; ctx.lineWidth = 2;
+        drawPoly(ctx, 0, 0, ent.width / 2, 8);
+        ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(-4, -3, 4, 0, Math.PI * 2); ctx.arc(5, 5, 3, 0, Math.PI * 2); ctx.fill(); break;
+      case 'fireMeteor':
+        ctx.rotate(ent.angle * 2); ctx.fillStyle = '#ee5253'; ctx.strokeStyle = '#ff9f43'; ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#ff6b3d'; ctx.shadowBlur = 12; drawPoly(ctx, 0, 0, ent.width / 2, 7); break;
+      case 'gigante':
+        ctx.rotate(ent.angle * 0.5); ctx.fillStyle = '#8a5a3c'; ctx.strokeStyle = '#ff9f43'; ctx.lineWidth = 3;
+        ctx.shadowColor = '#ff6b3d'; ctx.shadowBlur = 18; drawPoly(ctx, 0, 0, ent.width / 2, 10);
+        ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(0,0,0,.3)';
+        ctx.beginPath(); ctx.arc(-10, -8, 8, 0, Math.PI * 2); ctx.arc(12, 6, 6, 0, Math.PI * 2); ctx.arc(-4, 14, 4, 0, Math.PI * 2); ctx.fill(); break;
+      case 'satellite':
+        ctx.rotate(ent.angle); ctx.fillStyle = '#c8d6e5';
+        ctx.fillRect(-ent.width / 3, -ent.height / 3, (ent.width * 2) / 3, (ent.height * 2) / 3);
+        ctx.strokeStyle = '#2ee6ff'; ctx.lineWidth = 2; ctx.strokeRect(-ent.width / 2, -ent.height / 6, ent.width, ent.height / 3);
+        ctx.fillStyle = Math.sin(t * 10) > 0 ? '#ff4757' : '#550000'; ctx.fillRect(-2, -2, 4, 4); break;
+      case 'bala':
+        ctx.fillStyle = '#ff4757'; ctx.shadowColor = '#ff4757'; ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill(); break;
+    }
+    ctx.restore();
+  }
+
+  function desenharBoss() {
+    const b = boss; const t = performance.now() / 1000;
+    ctx.save();
+    ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+    if (b.flash > 0) ctx.filter = 'brightness(2.5)';
+    if (b.tipo === 'nave') {
+      ctx.fillStyle = 'rgba(77,255,122,.25)'; ctx.beginPath(); ctx.ellipse(0, -12, 26, 22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#4dff7a'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#4dff7a'; ctx.beginPath(); ctx.arc(0, -14, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(-3, -15, 2.5, 4, -0.3, 0, Math.PI * 2); ctx.ellipse(3, -15, 2.5, 4, 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#8395a7'; ctx.strokeStyle = '#c8d6e5'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(0, 6, 60, 18, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = Math.floor(t * 6 + i) % 2 ? '#ffd23f' : '#ff3fa4';
+        ctx.beginPath(); ctx.arc(-45 + i * 18, 8, 4, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (b.tipo === 'polvo') {
+      ctx.strokeStyle = '#b06bff'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+      for (let i = 0; i < 6; i++) {
+        const x0 = -40 + i * 16;
+        ctx.beginPath(); ctx.moveTo(x0, 10);
+        ctx.quadraticCurveTo(x0 + Math.sin(t * 4 + i) * 14, 30, x0 + Math.sin(t * 3 + i * 2) * 10, 46);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#8e44ad'; ctx.shadowColor = '#b06bff'; ctx.shadowBlur = 20;
+      ctx.beginPath(); ctx.ellipse(0, -6, 50, 32, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(-17, -8, 10, 0, Math.PI * 2); ctx.arc(17, -8, 10, 0, Math.PI * 2); ctx.fill();
+      const ox = Math.max(-4, Math.min(4, (player.x - b.x - b.w / 2) / 40));
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-17 + ox, -6, 5, 0, Math.PI * 2); ctx.arc(17 + ox, -6, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#d98cff'; ctx.beginPath(); ctx.arc(-30, -24, 5, 0, Math.PI * 2); ctx.arc(28, -26, 4, 0, Math.PI * 2); ctx.arc(0, -32, 4, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.rotate(Math.sin(t * 1.5) * 0.08);
+      ctx.fillStyle = '#6d4c33'; ctx.strokeStyle = '#ff9f43'; ctx.lineWidth = 3; ctx.shadowColor = '#ff6b3d'; ctx.shadowBlur = 25;
+      drawPoly(ctx, 0, 4, 48, 12);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#ffd23f'; ctx.beginPath();
+      ctx.moveTo(-28, -30); ctx.lineTo(-20, -52); ctx.lineTo(-10, -36); ctx.lineTo(0, -58); ctx.lineTo(10, -36); ctx.lineTo(20, -52); ctx.lineTo(28, -30); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ff3fa4'; ctx.beginPath(); ctx.arc(0, -42, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = Math.sin(t * 5) > 0 ? '#ff4757' : '#ffd23f';
+      ctx.beginPath(); ctx.arc(-15, 0, 7, 0, Math.PI * 2); ctx.arc(15, 0, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#2a1a0e'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-14, 20); ctx.lineTo(14, 20); ctx.stroke();
+    }
+    ctx.restore();
+    // barra de vida
+    if (!b.entrada) {
+      const bw = W - 40;
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(20, 8, bw, 10);
+      ctx.fillStyle = b.hp / b.hpMax > 0.5 ? '#4dff7a' : b.hp / b.hpMax > 0.25 ? '#ffd23f' : '#ff4757';
+      ctx.fillRect(21, 9, (bw - 2) * (b.hp / b.hpMax), 8);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(20, 8, bw, 10);
+    }
+  }
+
+  function render() {
+    ctx.save();
+    if (tremor > 0) ctx.translate((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+    ctx.fillStyle = CORES_FUNDO[faseIdx] || '#05030d';
+    ctx.fillRect(-10, -10, W + 20, H + 20);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    starsBgFar.forEach(s => ctx.fillRect(s.x, s.y, s.size, s.size));
+    ctx.fillStyle = 'rgba(46, 230, 255, 0.75)';
+    starsBgNear.forEach(s => ctx.fillRect(s.x, s.y, s.size, s.size * (estado === 'INTERVALO' ? 6 : 1)));
+
+    const t = performance.now() / 1000;
+    if (estado === 'PLAYING' && fase.especial === 'buraco') {
+      ctx.save(); ctx.translate(W / 2, H * 0.35);
+      for (let i = 0; i < 5; i++) {
+        ctx.rotate(t * 0.6 + i);
+        ctx.strokeStyle = ['rgba(255,63,164,.35)', 'rgba(46,230,255,.3)', 'rgba(255,210,63,.25)', 'rgba(180,120,255,.3)', 'rgba(255,255,255,.15)'][i];
+        ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(0, 0, 80 - i * 10, 24 - i * 3, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    if (estado === 'PLAYING' && fase.especial === 'vento') {
+      const v = Math.sin(tempoFase * 0.6);
+      ctx.strokeStyle = `rgba(255,170,60,${0.15 + Math.abs(v) * 0.25})`; ctx.lineWidth = 2;
+      for (let i = 0; i < 14; i++) {
+        const y = (i * 53 + t * 30) % H;
+        const x = ((i * 97 + t * 400 * Math.sign(v || 1)) % (W + 80) + W + 80) % (W + 80) - 40;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 30 * Math.sign(v || 1), y); ctx.stroke();
+      }
+    }
+
+    // lasers
+    lasers.forEach(L => {
+      if (L.aviso > 0) {
+        ctx.fillStyle = `rgba(255,71,87,${Math.floor(t * 12) % 2 ? 0.35 : 0.12})`;
+        ctx.fillRect(L.x + L.w / 2 - 2, 0, 4, H);
+        ctx.strokeStyle = 'rgba(255,71,87,.5)'; ctx.setLineDash([6, 6]); ctx.strokeRect(L.x, 0, L.w, H); ctx.setLineDash([]);
+        ctx.fillStyle = '#ff4757'; ctx.font = '10px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.fillText('!', L.x + L.w / 2, 30);
+      } else {
+        const g = ctx.createLinearGradient(L.x, 0, L.x + L.w, 0);
+        g.addColorStop(0, 'rgba(255,71,87,0)'); g.addColorStop(0.3, 'rgba(255,71,87,.9)'); g.addColorStop(0.5, '#fff'); g.addColorStop(0.7, 'rgba(255,71,87,.9)'); g.addColorStop(1, 'rgba(255,71,87,0)');
+        ctx.fillStyle = g; ctx.fillRect(L.x, 0, L.w, H);
+      }
+    });
+
+    entities.forEach(desenharEnt);
+    if (boss) desenharBoss();
+
+    // mísseis
+    misseis.forEach(m => {
+      ctx.fillStyle = m.forte ? '#4dff7a' : '#ffd23f';
+      ctx.fillRect(m.x - 2, m.y - 8, 4, 12);
+      ctx.fillStyle = 'rgba(255,159,67,.7)'; ctx.fillRect(m.x - 1.5, m.y + 4, 3, 6);
+    });
+
+    // nave do jogador (pisca quando invencível)
+    if (estado !== 'GAMEOVER' && !(invT > 0 && Math.floor(t * 14) % 2)) {
+      const px = player.x + player.width / 2, py = player.y + player.height / 2;
+      ctx.save(); ctx.translate(px, py);
+      const incl = (keys.left || (player.targetX !== null && player.targetX < player.x - 2)) ? -0.15 : (keys.right || (player.targetX !== null && player.targetX > player.x + 2)) ? 0.15 : 0;
+      ctx.rotate(incl);
+      const chama = 10 + Math.random() * 8;
+      ctx.fillStyle = Math.random() > 0.5 ? '#ff8a3d' : '#ff4757';
+      ctx.beginPath(); ctx.moveTo(-6, player.height / 2 - 4); ctx.lineTo(0, player.height / 2 + chama); ctx.lineTo(6, player.height / 2 - 4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#160e2e'; ctx.strokeStyle = '#2ee6ff'; ctx.lineWidth = 3;
+      ctx.shadowColor = '#2ee6ff'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(0, -player.height / 2); ctx.lineTo(player.width / 2, player.height / 2); ctx.lineTo(player.width / 4, player.height / 3);
+      ctx.lineTo(-player.width / 4, player.height / 3); ctx.lineTo(-player.width / 2, player.height / 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(0, -4, 6, 0, Math.PI * 2); ctx.fill();
+      if (hasShield) { ctx.strokeStyle = '#2ee6ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, player.width / 2 + 8 + Math.sin(t * 6) * 2, 0, Math.PI * 2); ctx.stroke(); }
+      if (efeitos.ima > 0) { ctx.strokeStyle = 'rgba(255,63,164,.4)'; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.arc(0, 0, 60 + (t * 60) % 40, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.restore();
+    }
+
+    // nebulosa escura: só se enxerga perto da nave
+    if (estado === 'PLAYING' && fase.especial === 'escuro') {
+      const px = player.x + player.width / 2, py = player.y + player.height / 2;
+      const g = ctx.createRadialGradient(px, py, 60, px, py, 170);
+      g.addColorStop(0, 'rgba(10,2,20,0)'); g.addColorStop(1, 'rgba(10,2,20,.97)');
+      ctx.fillStyle = g; ctx.fillRect(-10, -10, W + 20, H + 20);
+      // brilhinhos dos coletáveis lá longe
+      entities.forEach(e => {
+        if (PERIGOS.has(e.type)) return;
+        ctx.fillStyle = e.type === 'star' ? 'rgba(255,210,63,.6)' : 'rgba(46,230,255,.5)';
+        ctx.fillRect(e.x + e.width / 2 - 1.5, e.y + e.height / 2 - 1.5, 3, 3);
+      });
+    }
+    if (efeitos.lento > 0) { ctx.fillStyle = 'rgba(46,230,255,.07)'; ctx.fillRect(-10, -10, W + 20, H + 20); }
+
+    particles.forEach(p => {
+      ctx.globalAlpha = Math.max(0, p.alpha); ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    floatingTexts.forEach(ft => {
+      ctx.globalAlpha = Math.max(0, ft.alpha); ctx.fillStyle = ft.color;
+      ctx.font = '12px "Press Start 2P", monospace'; ctx.textAlign = 'center';
+      ctx.fillText(ft.text, ft.x, ft.y);
+    });
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  let lastTime = performance.now();
+  function gameLoop(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
+    lastTime = now;
+    update(dt);
+    render();
+    requestAnimationFrame(gameLoop);
+  }
+
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  initStars();
+  updateLivesUI();
+  mostrarRecordeMenu();
+  objetivoTexto.textContent = '12 FASES • 3 CHEFÕES';
+  requestAnimationFrame(gameLoop);
+  window.__cts = { get estado() { return estado; }, get fase() { return faseIdx; }, pularFase: () => { if (estado === 'PLAYING') faseCompleta(); } };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Torre Saltitante 3D</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#1d1b3a;font-family:system-ui,Segoe UI,Roboto,sans-serif;touch-action:none}
+  canvas{display:block}
+  #hud{position:fixed;top:0;left:0;right:0;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:700;pointer-events:none;text-shadow:0 2px 4px #0006}
+  #bar{position:fixed;top:48px;left:50%;transform:translateX(-50%);width:min(70vw,360px);height:10px;background:#ffffff33;border-radius:6px;overflow:hidden;pointer-events:none}
+  #bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd166,#ef476f)}
+  #combo{position:fixed;top:70px;width:100%;text-align:center;color:#ffd166;font-size:22px;font-weight:900;pointer-events:none;opacity:0;transition:opacity .2s}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#1d1b3acc;color:#fff;text-align:center;padding:20px}
+  .screen h1{font-size:clamp(28px,7vw,48px)}
+  .screen p{opacity:.85;max-width:420px;line-height:1.4}
+  button{font:inherit;font-weight:800;font-size:18px;border:0;border-radius:14px;padding:14px 28px;background:#ef476f;color:#fff;cursor:pointer;box-shadow:0 4px 0 #9d2445}
+  button:active{transform:translateY(3px);box-shadow:0 1px 0 #9d2445}
+  #levels{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  #levels button{padding:10px 0;width:52px;font-size:16px;background:#06d6a0;box-shadow:0 4px 0 #04936d}
+  #levels button:disabled{background:#555;box-shadow:0 4px 0 #333;cursor:default}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="hud"><span id="lvl">Nível 1</span><span id="score">0</span></div>
+<div id="bar"><i></i></div>
+<div id="combo">COMBO!</div>
+
+<div id="menu" class="screen">
+  <h1>Torre Saltitante</h1>
+  <p>Arraste para girar a torre (ou use ← → / A D). Caia pelos buracos e evite as partes vermelhas. Caia por 3 andares seguidos para quebrar qualquer plataforma!</p>
+  <div id="levels"></div>
+</div>
+<div id="over" class="screen hidden">
+  <h1 id="overTitle">Fim de jogo</h1>
+  <p id="overText"></p>
+  <button id="overBtn">Tentar de novo</button>
+  <button id="menuBtn" style="background:#118ab2;box-shadow:0 4px 0 #0b5c77">Menu</button>
+</div>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ const _lim={};
+ return {tom,ruido,seq,
+  lim:(k,ms)=>{const n=performance.now();if(_lim[k]&&n-_lim[k]<ms)return false;_lim[k]=n;return true},
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const MAX_LEVEL = 10;
+let unlocked = 1;
+try { unlocked = Math.max(1, parseInt(localStorage.getItem('helix_unlocked')) || 1); } catch (e) {}
+const save = () => { try { localStorage.setItem('helix_unlocked', unlocked); } catch (e) {} };
+
+// ---------- Cena ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2b2d5c);
+scene.fog = new THREE.Fog(0x2b2d5c, 10, 30);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 100);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444466, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(4, 8, 6);
+scene.add(sun);
+
+const tower = new THREE.Group();
+scene.add(tower);
+
+const SEG = 12, SEG_ANG = Math.PI * 2 / SEG;
+const R_IN = 0.9, R_OUT = 3, THICK = 0.35, SPACING = 3.2;
+const BALL_R = 0.32, BALL_DIST = 2.05;
+
+const palettes = [
+  [0x06d6a0, 0xffd166], [0x118ab2, 0xf78c6b], [0x8338ec, 0x3a86ff], [0xff006e, 0xfb5607],
+  [0x2ec4b6, 0xcbf3f0], [0xe9c46a, 0x2a9d8f], [0xf4a261, 0x264653], [0x90be6d, 0xf9c74f],
+  [0x4cc9f0, 0x7209b7], [0xffbe0b, 0xff006e]
+];
+
+// Geometria de um setor (pedaço de anel)
+function sectorGeo() {
+  const s = new THREE.Shape();
+  const steps = 3;
+  s.moveTo(Math.cos(0) * R_OUT, Math.sin(0) * R_OUT);
+  for (let i = 1; i <= steps; i++) { const a = SEG_ANG * i / steps; s.lineTo(Math.cos(a) * R_OUT, Math.sin(a) * R_OUT); }
+  for (let i = steps; i >= 0; i--) { const a = SEG_ANG * i / steps; s.lineTo(Math.cos(a) * R_IN, Math.sin(a) * R_IN); }
+  const g = new THREE.ExtrudeGeometry(s, { depth: THICK, bevelEnabled: false });
+  g.rotateX(-Math.PI / 2); // forma no plano XZ, espessura para cima
+  return g;
+}
+const SECTOR = sectorGeo();
+
+const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(BALL_R, 1), new THREE.MeshLambertMaterial({ color: 0xff4d6d, flatShading: true }));
+scene.add(ball);
+const shadow = new THREE.Mesh(new THREE.CircleGeometry(BALL_R * 0.9, 12), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 }));
+shadow.rotation.x = -Math.PI / 2;
+scene.add(shadow);
+
+// Partículas simples de impacto
+const splats = [];
+function splat(pos, color) {
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(new THREE.TetrahedronGeometry(0.08), new THREE.MeshBasicMaterial({ color }));
+    m.position.copy(pos);
+    m.userData.v = new THREE.Vector3((Math.random() - .5) * 4, Math.random() * 3, (Math.random() - .5) * 4);
+    m.userData.t = 0.6;
+    scene.add(m); splats.push(m);
+  }
+}
+
+// ---------- Estado ----------
+let level = 1, rings = [], ballY = 0, vy = 0, rot = 0, score = 0, streak = 0, playing = false, lowestCam = 0, totalRings = 0, passed = 0;
+const GRAV = -26, BOUNCE = 9.5;
+
+function clearTower() {
+  while (tower.children.length) { const c = tower.children.pop(); c.traverse(o => { if (o.material && o.material !== mats.safe && o.material !== mats.danger && o.material !== mats.goal) o.material.dispose?.(); }); }
+  rings = [];
+}
+const mats = {};
+
+function buildLevel(n) {
+  clearTower();
+  const [c1, c2] = palettes[n - 1];
+  mats.safe = new THREE.MeshLambertMaterial({ color: c1, flatShading: true });
+  mats.safe2 = new THREE.MeshLambertMaterial({ color: new THREE.Color(c1).multiplyScalar(0.85), flatShading: true });
+  mats.danger = new THREE.MeshLambertMaterial({ color: 0xe63946, flatShading: true, emissive: 0x330000 });
+  mats.goal = new THREE.MeshLambertMaterial({ color: 0xffd700, flatShading: true, emissive: 0x332200 });
+  scene.background.set(new THREE.Color(c2).multiplyScalar(0.35));
+  scene.fog.color.copy(scene.background);
+
+  const count = 8 + n * 3;
+  totalRings = count;
+  const dangerP = 0.04 + n * 0.035;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(R_IN, R_IN, (count + 2) * SPACING, 10), new THREE.MeshLambertMaterial({ color: c2, flatShading: true }));
+  pole.position.y = -(count) * SPACING / 2;
+  tower.add(pole);
+
+  for (let i = 0; i <= count; i++) {
+    const g = new THREE.Group();
+    const y = -i * SPACING;
+    g.position.y = y;
+    const isGoal = i === count;
+    const types = new Array(SEG).fill(0); // 0 seguro, 1 buraco, 2 perigo
+    if (!isGoal) {
+      const gapStart = Math.floor(Math.random() * SEG);
+      const gapLen = n < 4 ? 3 : 2;
+      for (let k = 0; k < gapLen; k++) types[(gapStart + k) % SEG] = 1;
+      for (let k = 0; k < SEG; k++) if (types[k] === 0 && Math.random() < dangerP) types[k] = 2;
+      // garantir que o primeiro andar tenha chão seguro onde a bola começa
+      if (i === 0) for (let k = 0; k < SEG; k++) if (types[k] === 2) types[k] = 0;
+      // garantir pelo menos 3 seguros
+      if (types.filter(t => t === 0).length < 3) for (let k = 0; k < SEG; k++) if (types[k] === 2) { types[k] = 0; if (types.filter(t => t === 0).length >= 3) break; }
+    }
+    const meshes = [];
+    for (let k = 0; k < SEG; k++) {
+      if (types[k] === 1) { meshes.push(null); continue; }
+      const mat = isGoal ? mats.goal : types[k] === 2 ? mats.danger : (k % 2 ? mats.safe : mats.safe2);
+      const m = new THREE.Mesh(SECTOR, mat);
+      m.rotation.y = k * SEG_ANG;
+      if (types[k] === 2) m.scale.set(1, 1.25, 1);
+      g.add(m); meshes.push(m);
+    }
+    // rotação aleatória do anel, guardada para calcular colisões
+    g.rotation.y = Math.random() * Math.PI * 2;
+    if (i === 0) g.rotation.y = 0;
+    tower.add(g);
+    rings.push({ g, y, types, meshes, broken: false, goal: isGoal });
+  }
+  // posicionar o primeiro anel com chão seguro sob a bola
+  ballY = 1.5; vy = 0; rot = 0; tower.rotation.y = 0; streak = 0; passed = 0;
+  lowestCam = 0;
+}
+
+// Ângulo da bola no referencial de um anel → índice do setor
+const tmpV = new THREE.Vector3();
+function segmentUnderBall(ring) {
+  tmpV.set(0, ring.y, BALL_DIST);
+  ring.g.worldToLocal(tmpV);
+  let a = Math.atan2(-tmpV.z, tmpV.x); // a forma foi girada -90° em X: y da forma → -z
+  if (a < 0) a += Math.PI * 2;
+  return Math.floor(a / SEG_ANG) % SEG;
+}
+
+function breakRing(ring) {
+  ring.broken = true;
+  ring.meshes.forEach((m, k) => {
+    if (!m) return;
+    m.userData.fly = { v: new THREE.Vector3(Math.cos(k * SEG_ANG) * 6, 3, -Math.sin(k * SEG_ANG) * 6), t: 0.7 };
+  });
+  flying.push(ring);
+}
+const flying = [];
+
+// ---------- Controles ----------
+let dragX = null, keyDir = 0;
+renderer.domElement.addEventListener('pointerdown', e => { dragX = e.clientX; });
+addEventListener('pointermove', e => { if (dragX !== null && playing) { rot += (e.clientX - dragX) * 0.012; dragX = e.clientX; } });
+addEventListener('pointerup', () => dragX = null);
+addEventListener('pointercancel', () => dragX = null);
+addEventListener('keydown', e => { if (['ArrowLeft', 'a', 'A'].includes(e.key)) keyDir = -1; if (['ArrowRight', 'd', 'D'].includes(e.key)) keyDir = 1; });
+addEventListener('keyup', e => { if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) keyDir = 0; });
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+function renderMenu() {
+  const box = $('levels'); box.innerHTML = '';
+  for (let i = 1; i <= MAX_LEVEL; i++) {
+    const b = document.createElement('button');
+    b.textContent = i; b.disabled = i > unlocked;
+    b.onclick = () => start(i);
+    box.appendChild(b);
+  }
+}
+function start(n) {
+  level = n; score = 0;
+  buildLevel(n);
+  $('menu').classList.add('hidden'); $('over').classList.add('hidden');
+  $('lvl').textContent = 'Nível ' + n;
+  updateHud();
+  playing = true;
+}
+function updateHud() { $('score').textContent = score; $('bar').firstElementChild.style.width = (passed / totalRings * 100) + '%'; }
+function gameOver(win) {
+  playing = false; win ? SOM.vitoria() : SOM.derrota();
+  $('over').classList.remove('hidden');
+  if (win) {
+    if (level >= unlocked && level < MAX_LEVEL) { unlocked = level + 1; save(); }
+    $('overTitle').textContent = level === MAX_LEVEL ? 'Você zerou! 🏆' : 'Nível completo!';
+    $('overText').textContent = 'Pontos: ' + score;
+    $('overBtn').textContent = level === MAX_LEVEL ? 'Jogar de novo' : 'Próximo nível';
+    $('overBtn').onclick = () => start(level === MAX_LEVEL ? 1 : level + 1);
+  } else {
+    $('overTitle').textContent = 'Fim de jogo';
+    $('overText').textContent = `Você chegou a ${Math.round(passed / totalRings * 100)}% do nível ${level}.`;
+    $('overBtn').textContent = 'Tentar de novo';
+    $('overBtn').onclick = () => start(level);
+  }
+}
+$('menuBtn').onclick = () => { $('over').classList.add('hidden'); $('menu').classList.remove('hidden'); renderMenu(); };
+renderMenu();
+buildLevel(1);
+
+// ---------- Loop ----------
+const clock = new THREE.Clock();
+function loop() {
+  const dt = Math.min(clock.getDelta(), 0.033);
+  if (playing) {
+    rot += keyDir * 3 * dt;
+    tower.rotation.y = rot;
+    const prevY = ballY;
+    vy += GRAV * dt;
+    ballY += vy * dt;
+    // próximo anel não quebrado abaixo
+    for (const ring of rings) {
+      if (ring.broken) continue;
+      const top = ring.y + THICK;
+      if (prevY - BALL_R >= top - 0.001 && ballY - BALL_R < top && vy < 0) {
+        const seg = segmentUnderBall(ring);
+        const t = ring.types[seg];
+        if (ring.goal) { ballY = top + BALL_R; splat(ball.position, 0xffd700); gameOver(true); break; }
+        if (t === 1) { // buraco: atravessa
+          breakRing(ring); streak++; passed++; score += 1 * streak; updateHud(); SOM.tom(500 + streak * 120, .08, 'triangle', .05);
+          if (streak >= 3) { $('combo').style.opacity = 1; }
+          continue;
+        }
+        if (streak >= 3) { // combo quebra qualquer andar
+          breakRing(ring); passed++; score += 5; streak = 0; SOM.explosao(); $('combo').style.opacity = 0; updateHud();
+          ballY = top + BALL_R; vy = BOUNCE * 0.7; splat(ball.position, 0xffd166);
+          break;
+        }
+        if (t === 2) { splat(ball.position, 0xe63946); gameOver(false); break; }
+        ballY = top + BALL_R; vy = BOUNCE; streak = 0; SOM.pulo(); $('combo').style.opacity = 0;
+        splat(new THREE.Vector3(0, top, BALL_DIST), mats.safe.color.getHex());
+        break;
+      }
+      if (ring.y < ballY) break;
+    }
+  }
+  ball.position.set(0, ballY, BALL_DIST);
+  const sq = 1 + Math.min(Math.abs(vy) * 0.015, 0.25);
+  ball.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
+  // sombra no anel abaixo
+  const below = rings.find(r => !r.broken && r.y + THICK <= ballY);
+  if (below) { shadow.visible = true; shadow.position.set(0, below.y + THICK + 0.01, BALL_DIST); } else shadow.visible = false;
+
+  lowestCam = Math.min(lowestCam, ballY);
+  const camY = lowestCam + 3.2;
+  camera.position.set(0, camY + 2.5, 11.5);
+  camera.lookAt(0, camY - 2.2, 0);
+  sun.position.set(4, camY + 8, 6);
+
+  for (let i = flying.length - 1; i >= 0; i--) {
+    const ring = flying[i]; let alive = false;
+    ring.meshes.forEach(m => {
+      if (!m || !m.userData.fly) return;
+      const f = m.userData.fly; f.t -= dt;
+      if (f.t > 0) { alive = true; m.position.addScaledVector(f.v, dt); f.v.y -= 20 * dt; m.rotation.x += dt * 5; m.scale.multiplyScalar(0.97); }
+      else m.visible = false;
+    });
+    if (!alive) flying.splice(i, 1);
+  }
+  for (let i = splats.length - 1; i >= 0; i--) {
+    const s = splats[i]; s.userData.t -= dt;
+    s.position.addScaledVector(s.userData.v, dt); s.userData.v.y -= 15 * dt;
+    if (s.userData.t <= 0) { scene.remove(s); s.geometry.dispose(); splats.splice(i, 1); }
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+loop();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = innerWidth < innerHeight ? 70 : 55;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+dispatchEvent(new Event('resize'));
+</script>
+</body>
+</html>

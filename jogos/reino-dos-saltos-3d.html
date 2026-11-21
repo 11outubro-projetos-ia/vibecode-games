@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reino dos Saltos 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #38bdf8;
+            font-family: 'Fredoka', sans-serif;
+        }
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .text-outline {
+            text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75), 0 0 8px rgba(0, 0, 0, 0.35);
+        }
+        .cartao {
+            border: 4px solid #ffffff;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.5);
+        }
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.28);
+            border: 3px solid rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(4px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+            transition: transform 0.06s ease, background 0.1s ease;
+        }
+        .touch-btn:active, .touch-btn.pressed {
+            transform: scale(0.91);
+            background: rgba(250, 204, 21, 0.75);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas 3D Principal -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- HUD Superior Responsivo -->
+    <div id="hud" class="hidden fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5">
+        <div class="flex justify-between items-start gap-2 w-full">
+            <!-- Esquerda: Vidas, Moedas e Estrelas -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <!-- Vidas -->
+                <div class="bg-slate-900/75 border-2 border-white/80 rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 shadow-lg">
+                    <span class="text-lg sm:text-2xl">❤️</span>
+                    <span id="hud-lives" class="text-white font-bold text-lg sm:text-2xl text-outline">3</span>
+                </div>
+
+                <!-- Moedas -->
+                <div class="bg-slate-900/75 border-2 border-amber-300/90 rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 shadow-lg">
+                    <span class="text-lg sm:text-2xl">🪙</span>
+                    <span id="hud-coins" class="text-amber-300 font-bold text-lg sm:text-2xl text-outline">0</span>
+                </div>
+
+                <!-- Estrelas da Fase -->
+                <div class="bg-slate-900/75 border-2 border-yellow-400 rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 shadow-lg">
+                    <span class="text-lg sm:text-2xl">⭐</span>
+                    <span id="hud-stars" class="text-yellow-300 font-bold text-lg sm:text-2xl text-outline">0/3</span>
+                </div>
+            </div>
+
+            <!-- Centro: Nome da Fase (visível em telas maiores) -->
+            <div class="hidden md:flex flex-col items-center bg-slate-900/70 border-2 border-white/60 rounded-2xl px-5 py-1.5 shadow-lg">
+                <span class="text-[11px] uppercase tracking-widest text-sky-300 font-bold">Mundo Atual</span>
+                <span id="hud-level-name" class="text-white font-bold text-lg text-outline">1-1 Colinas do Reino</span>
+            </div>
+
+            <!-- Direita: Botões de Som, Rotação Câmera Rápida e Menu -->
+            <div class="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
+                <button id="btn-cam-left" title="Girar Câmera Esquerda (Q)" class="bg-slate-900/75 hover:bg-slate-800 text-white border-2 border-white/70 rounded-xl w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center font-bold text-sm sm:text-base shadow-lg active:scale-95">
+                    ↺
+                </button>
+                <button id="btn-cam-right" title="Girar Câmera Direita (E)" class="bg-slate-900/75 hover:bg-slate-800 text-white border-2 border-white/70 rounded-xl w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center font-bold text-sm sm:text-base shadow-lg active:scale-95">
+                    ↻
+                </button>
+                <button id="btn-mute" title="Ativar/Desativar Som" class="bg-slate-900/75 hover:bg-slate-800 text-white border-2 border-white/70 rounded-xl w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center text-base sm:text-lg shadow-lg active:scale-95">
+                    🔊
+                </button>
+                <button id="btn-open-menu" class="bg-red-600 hover:bg-red-500 text-white border-2 border-white rounded-xl px-3 h-9 sm:h-11 font-bold text-xs sm:text-sm uppercase tracking-wider shadow-lg active:scale-95">
+                    Fases
+                </button>
+            </div>
+        </div>
+
+        <!-- Aviso Flutuante Central (Coleta de Estrela / Mensagens) -->
+        <div id="floating-banner" class="self-center pointer-events-none opacity-0 transition-all duration-300 transform scale-90">
+            <div class="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 border-4 border-white text-slate-900 font-bold text-lg sm:text-2xl px-6 py-2 rounded-full shadow-2xl">
+                ⭐ ESTRELA COLETADA! ⭐
+            </div>
+        </div>
+
+        <!-- Dica discreta na base (PC) -->
+        <div id="pc-hint" class="hidden sm:block self-center bg-slate-900/60 text-white/90 text-xs px-4 py-1 rounded-full border border-white/25">
+            <b>WASD / Setas:</b> Mover • <b>Espaço:</b> Pulo / Pulo Duplo • <b>Shift:</b> Correr • <b>Q / E ou Arrastar Mouse:</b> Girar Câmera
+        </div>
+    </div>
+
+    <!-- Controles Touch Virtuais (Celulares e Tablets) -->
+    <div id="touch-controls" class="hidden fixed inset-0 pointer-events-none z-25">
+        <!-- Área de Arraste para Girar Câmera (Metade superior/central da tela) -->
+        <div id="camera-touch-zone" class="pointer-events-auto fixed inset-x-0 top-14 bottom-44"></div>
+
+        <!-- Joystick Virtual Analógico (Canto Inferior Esquerdo) -->
+        <div id="joystick-area" class="pointer-events-auto fixed bottom-6 left-5 sm:bottom-8 sm:left-8 w-32 h-32 sm:w-36 sm:h-36 rounded-full bg-white/20 border-3 border-white/60 backdrop-blur-sm flex items-center justify-center shadow-xl">
+            <div id="joystick-stick" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-b from-red-500 to-red-700 border-3 border-white shadow-lg"></div>
+        </div>
+
+        <!-- Botões de Ação (Canto Inferior Direito: Correr e Pulo Grande) -->
+        <div class="pointer-events-auto fixed bottom-6 right-5 sm:bottom-8 sm:right-8 flex items-end gap-3 sm:gap-4">
+            <button id="touch-btn-run" class="touch-btn w-16 h-16 sm:w-20 sm:h-20 rounded-full flex flex-col items-center justify-center text-white font-bold text-xs sm:text-sm text-outline">
+                <span class="text-lg sm:text-xl">⚡</span>
+                <span>CORRER</span>
+            </button>
+            <button id="touch-btn-jump" class="touch-btn w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-emerald-500/55 border-4 border-white flex flex-col items-center justify-center text-white font-bold text-base sm:text-lg text-outline shadow-2xl">
+                <span class="text-2xl sm:text-3xl">⬆️</span>
+                <span>PULAR</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Menu Principal / Seletor de Fases -->
+    <div id="main-menu" class="fixed inset-0 z-40 bg-sky-950/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="max-w-3xl w-full bg-gradient-to-b from-sky-500 to-blue-700 cartao rounded-3xl p-5 sm:p-8 text-white">
+            <div class="text-center mb-6">
+                <div class="inline-block bg-yellow-400 text-slate-950 font-bold text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow mb-2">
+                    Aventura Plataforma 3D • PC, Tablet & Celular
+                </div>
+                <h1 class="text-4xl sm:text-6xl font-bold tracking-tight text-outline">
+                    REINO DOS <span class="text-yellow-300">SALTOS</span> 3D
+                </h1>
+                <p class="text-sky-100 text-xs sm:text-base mt-1 font-medium">
+                    Pule em cima dos besouros e caracóis, acerte os blocos de cristal, junte as 3 Estrelas e chegue à bandeira!
+                </p>
+            </div>
+
+            <!-- Cards das 3 Fases -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6" id="level-cards">
+                <!-- Fase 1 -->
+                <button type="button" data-level="0" class="level-select-btn text-left p-4 rounded-2xl bg-emerald-500/90 hover:bg-emerald-400 border-4 border-yellow-300 shadow-lg transition transform hover:-translate-y-1">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-lg">FASE 1</span>
+                        <span class="text-xl">🌳</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-outline">Colinas do Reino</h3>
+                    <p class="text-xs text-emerald-50 mt-1">Campos verdes ensolarados, blocos de cristal, troncos ocos e 3 estrelas.</p>
+                </button>
+
+                <!-- Fase 2 -->
+                <button type="button" data-level="1" class="level-select-btn text-left p-4 rounded-2xl bg-sky-600/90 hover:bg-sky-500 border-4 border-white/60 shadow-lg transition transform hover:-translate-y-1">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-lg">FASE 2</span>
+                        <span class="text-xl">☁️</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-outline">Ilhas no Céu</h3>
+                    <p class="text-xs text-sky-50 mt-1">Plataformas móveis flutuantes, pontes estreitas e saltos nas alturas.</p>
+                </button>
+
+                <!-- Fase 3 -->
+                <button type="button" data-level="2" class="level-select-btn text-left p-4 rounded-2xl bg-red-600/90 hover:bg-red-500 border-4 border-white/60 shadow-lg transition transform hover:-translate-y-1">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-lg">FASE 3</span>
+                        <span class="text-xl">🌋</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-outline">Fortaleza de Lava</h3>
+                    <p class="text-xs text-red-50 mt-1">Pontes sobre magma incandescente, plataformas móveis e o desafio final.</p>
+                </button>
+            </div>
+
+            <button id="btn-play-selected" class="w-full py-4 rounded-2xl bg-gradient-to-b from-yellow-300 to-amber-500 hover:from-yellow-200 hover:to-amber-400 text-slate-950 font-bold text-2xl sm:text-3xl uppercase tracking-wide border-4 border-white shadow-xl transition transform active:scale-95">
+                ▶ JOGAR AGORA
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal de Vitória de Fase / Game Over -->
+    <div id="end-modal" class="hidden fixed inset-0 z-35 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-gradient-to-b from-amber-400 to-orange-500 cartao rounded-3xl p-6 sm:p-8 text-center text-white">
+            <div id="end-emoji" class="text-5xl mb-2">🏆</div>
+            <h2 id="end-title" class="text-3xl sm:text-4xl font-bold text-outline mb-2">FASE CONCLUÍDA!</h2>
+            <p id="end-subtitle" class="text-white/95 text-sm sm:text-base mb-5 font-medium">Você alcançou a bandeira do castelo!</p>
+
+            <div class="bg-slate-900/40 rounded-2xl p-4 mb-6 flex justify-around border-2 border-white/40">
+                <div>
+                    <div class="text-xs uppercase text-amber-200 font-bold">Estrelas</div>
+                    <div id="end-stars" class="text-2xl font-bold text-yellow-300 text-outline">3 / 3</div>
+                </div>
+                <div>
+                    <div class="text-xs uppercase text-amber-200 font-bold">Moedas</div>
+                    <div id="end-coins" class="text-2xl font-bold text-white text-outline">24</div>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="btn-next-action" class="flex-1 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 border-3 border-white text-white font-bold text-xl uppercase shadow-lg text-outline transition active:scale-95">
+                    Próxima Fase
+                </button>
+                <button id="btn-modal-menu" class="flex-1 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border-3 border-white text-white font-bold text-xl uppercase shadow-lg transition active:scale-95">
+                    Menu
+                </button>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * REINO DOS SALTOS 3D - Plataforma 3D Low Poly (Arquivo Único)
+ * Engine 3D: Three.js r128 + Física AABB com Plataformas Móveis + Web Audio Procedural
+ */
+
+// ==========================================
+// 1. ÁUDIO PROCEDURAL ESTILO CLÁSSICO (WEB AUDIO)
+// ==========================================
+class RetroAudio {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    toggleMute() {
+        this.muted = !this.muted;
+        document.getElementById('btn-mute').textContent = this.muted ? '🔇' : '🔊';
+    }
+
+    playTone(freqStart, freqEnd, duration, type = 'square', volume = 0.14, delay = 0) {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime + delay;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freqStart, now);
+        if (freqEnd !== freqStart) {
+            osc.frequency.exponentialRampToValueAtTime(freqEnd, now + duration);
+        }
+        gain.gain.setValueAtTime(volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.01);
+    }
+
+    playJump(isDouble = false) {
+        if (isDouble) {
+            this.playTone(380, 760, 0.18, 'sine', 0.16);
+        } else {
+            this.playTone(260, 560, 0.16, 'square', 0.11);
+        }
+    }
+
+    playCoin() {
+        this.playTone(987.77, 987.77, 0.07, 'sine', 0.16, 0);      // B5
+        this.playTone(1318.51, 1318.51, 0.22, 'sine', 0.16, 0.07); // E6
+    }
+
+    playBlockHit() {
+        this.playTone(180, 95, 0.1, 'triangle', 0.2);
+    }
+
+    playStomp() {
+        this.playTone(320, 110, 0.12, 'square', 0.16);
+        this.playTone(440, 660, 0.1, 'sine', 0.14, 0.06);
+    }
+
+    playHurt() {
+        this.playTone(320, 120, 0.28, 'sawtooth', 0.18);
+    }
+
+    playStar() {
+        const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
+        notes.forEach((n, i) => {
+            this.playTone(n, n, 0.11, 'triangle', 0.18, i * 0.09);
+        });
+    }
+
+    playWin() {
+        const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+        notes.forEach((n, i) => {
+            this.playTone(n, n, 0.16, 'square', 0.13, i * 0.11);
+        });
+    }
+}
+
+const sfx = new RetroAudio();
+
+// ==========================================
+// 2. ESTADO GLOBAL DO JOGO
+// ==========================================
+const GAME = {
+    state: 'MENU', // MENU, PLAYING, LEVEL_END, GAMEOVER
+    currentLevel: 0,
+    coins: 0,
+    lives: 3,
+    starsCollected: 0,
+    totalStarsInLevel: 3,
+    isMobile: ('ontouchstart' in window) || (navigator.maxTouchPoints > 0),
+    platforms: [],      // Blocos sólidos + móveis + blocos surpresa
+    coinsList: [],      // Moedas flutuantes
+    starsList: [],      // Estrelas grandes
+    enemies: [],        // Besouros e Caracóis
+    decorations: [],    // Nuvens, árvores, troncos, lava
+    particles: [],      // Partículas de impacto e brilho
+    goalPole: null,     // Mastro e bandeira de chegada
+    checkpoint: new THREE.Vector3(0, 2, 0),
+    lavaY: null
+};
+
+// ==========================================
+// 3. CENA, CÂMERA E RENDERER THREE.JS
+// ==========================================
+const canvas = document.getElementById('game-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 300);
+
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3b5998, 0.85);
+scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.95);
+dirLight.position.set(35, 65, 35);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
+const d = 55;
+dirLight.shadow.camera.left = -d;
+dirLight.shadow.camera.right = d;
+dirLight.shadow.camera.top = d;
+dirLight.shadow.camera.bottom = -d;
+scene.add(dirLight);
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ==========================================
+// 4. PERSONAGEM ARTICULADO LOW POLY + SOMBRA NO CHÃO
+// ==========================================
+function createHeroCharacter() {
+    const root = new THREE.Group();
+    const model = new THREE.Group();
+    root.add(model);
+
+    const redMat = new THREE.MeshLambertMaterial({ color: 0xf97316, flatShading: true });     // Moletom laranja
+    const blueMat = new THREE.MeshLambertMaterial({ color: 0x0f766e, flatShading: true });    // Bermuda verde-azulada
+    const skinMat = new THREE.MeshLambertMaterial({ color: 0xc68642, flatShading: true });    // Pele
+    const whiteMat = skinMat;                                                                 // Mãos
+    const brownMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc, flatShading: true });   // Tênis brancos
+    const hatMat = new THREE.MeshLambertMaterial({ color: 0x7c3aed, flatShading: true });     // Gorro roxo
+    const darkMat = new THREE.MeshLambertMaterial({ color: 0x1f2937, flatShading: true });
+
+    // Tronco (moletom)
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.66, 0.44), redMat);
+    torso.position.y = 0.78;
+    torso.castShadow = true;
+    model.add(torso);
+
+    // Bolso canguru e cordões do capuz
+    const bolso = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.05), new THREE.MeshLambertMaterial({ color: 0xea580c, flatShading: true }));
+    bolso.position.set(0, 0.66, 0.23);
+    model.add(bolso);
+    [-0.1, 0.1].forEach(cx => {
+        const cordao = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+        cordao.position.set(cx, 0.98, 0.24);
+        model.add(cordao);
+    });
+
+    // Mochilinha amarela nas costas
+    const mochila = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.5, 0.22), new THREE.MeshLambertMaterial({ color: 0xfacc15, flatShading: true }));
+    mochila.position.set(0, 0.85, -0.32);
+    mochila.castShadow = true;
+    model.add(mochila);
+
+    // Cabeça
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.52, 0.54), skinMat);
+    head.position.y = 1.4;
+    head.castShadow = true;
+    model.add(head);
+
+    // Olhos grandes e sorriso
+    [-0.13, 0.13].forEach(ex => {
+        const olho = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.13, 0.04), darkMat);
+        olho.position.set(ex, 1.44, 0.28);
+        model.add(olho);
+    });
+    const sorriso = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.04), darkMat);
+    sorriso.position.set(0, 1.27, 0.28);
+    model.add(sorriso);
+
+    // Gorro com pompom
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.24, 0.58), hatMat);
+    cap.position.set(0, 1.74, 0);
+    cap.castShadow = true;
+    model.add(cap);
+    const barra = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.09, 0.6), new THREE.MeshLambertMaterial({ color: 0xddd6fe, flatShading: true }));
+    barra.position.set(0, 1.64, 0);
+    model.add(barra);
+    const pompom = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 0), new THREE.MeshLambertMaterial({ color: 0xddd6fe, flatShading: true }));
+    pompom.position.set(0, 1.95, 0);
+    model.add(pompom);
+
+    // Braços articulados (manga do moletom + mão)
+    function makeArm(side) {
+        const pivot = new THREE.Group();
+        pivot.position.set(side * 0.48, 1.02, 0);
+        const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.36, 0.22), redMat);
+        sleeve.position.y = -0.15;
+        pivot.add(sleeve);
+        const glove = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.2, 0.24), whiteMat);
+        glove.position.y = -0.4;
+        pivot.add(glove);
+        model.add(pivot);
+        return pivot;
+    }
+    const leftArm = makeArm(-1);
+    const rightArm = makeArm(1);
+
+    // Pernas articuladas (bermuda + tênis)
+    function makeLeg(side) {
+        const pivot = new THREE.Group();
+        pivot.position.set(side * 0.19, 0.48, 0);
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.34, 0.26), blueMat);
+        leg.position.y = -0.15;
+        pivot.add(leg);
+        const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.38), brownMat);
+        shoe.position.set(0, -0.38, 0.05);
+        pivot.add(shoe);
+        model.add(pivot);
+        return pivot;
+    }
+    const leftLeg = makeLeg(-1);
+    const rightLeg = makeLeg(1);
+
+    // Sombra circular projetada diretamente no chão abaixo do personagem (essencial para precisão 3D!)
+    const shadowGeo = new THREE.CircleGeometry(0.55, 20);
+    shadowGeo.rotateX(-Math.PI / 2);
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false });
+    const dropShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    scene.add(dropShadow);
+
+    return { root, model, leftArm, rightArm, leftLeg, rightLeg, dropShadow };
+}
+
+const heroMesh = createHeroCharacter();
+scene.add(heroMesh.root);
+
+const player = {
+    pos: new THREE.Vector3(0, 1, 0),
+    vel: new THREE.Vector3(0, 0, 0),
+    yaw: 0,
+    radius: 0.42,
+    height: 1.75,
+    grounded: false,
+    coyoteTimer: 0,
+    jumpBufferTimer: 0,
+    canDoubleJump: true,
+    isDoubleJumping: false,
+    spinAngle: 0,
+    invulnTimer: 0,
+    walkTimer: 0,
+    standingPlatform: null
+};
+
+// ==========================================
+// 5. CONSTRUTOR DE ELEMENTOS 3D DO CENÁRIO
+// ==========================================
+let worldGroup = new THREE.Group();
+scene.add(worldGroup);
+
+function clearLevel() {
+    scene.remove(worldGroup);
+    worldGroup = new THREE.Group();
+    scene.add(worldGroup);
+
+    GAME.platforms = [];
+    GAME.coinsList = [];
+    GAME.starsList = [];
+    GAME.enemies = [];
+    GAME.decorations = [];
+    GAME.particles = [];
+    GAME.goalPole = null;
+    GAME.lavaY = null;
+    GAME.starsCollected = 0;
+}
+
+function addPlatform(x, y, z, w, h, d, style = 'grass', options = {}) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    if (style === 'grass') {
+        // Bloco de terra com topo de grama verde vibrante
+        const dirtH = Math.max(0.2, h - 0.35);
+        const dirt = new THREE.Mesh(
+            new THREE.BoxGeometry(w, dirtH, d),
+            new THREE.MeshLambertMaterial({ color: 0x92400e, flatShading: true })
+        );
+        dirt.position.y = -0.175;
+        dirt.receiveShadow = true;
+        dirt.castShadow = true;
+        group.add(dirt);
+
+        const grass = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.06, 0.35, d + 0.06),
+            new THREE.MeshLambertMaterial({ color: 0x22c55e, flatShading: true })
+        );
+        grass.position.y = h / 2 - 0.175;
+        grass.receiveShadow = true;
+        group.add(grass);
+    } else if (style === 'question') {
+        // Bloco de cristal roxo com um diamante branco
+        const box = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: 0x8b5cf6, emissive: 0x2e1065, flatShading: true })
+        );
+        box.castShadow = true;
+        box.receiveShadow = true;
+        group.add(box);
+
+        // Diamante branco nas faces
+        const mark = new THREE.Mesh(
+            new THREE.BoxGeometry(w * 0.36, h * 0.36, d + 0.06),
+            new THREE.MeshBasicMaterial({ color: 0xede9fe })
+        );
+        mark.rotation.z = Math.PI / 4;
+        group.add(mark);
+        const markSide = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.06, h * 0.36, d * 0.36),
+            new THREE.MeshBasicMaterial({ color: 0xede9fe })
+        );
+        markSide.rotation.x = Math.PI / 4;
+        group.add(markSide);
+    } else if (style === 'brick') {
+        const brick = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: 0xc2410c, flatShading: true })
+        );
+        brick.castShadow = true;
+        brick.receiveShadow = true;
+        group.add(brick);
+    } else if (style === 'wood') {
+        const wood = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: 0xb45309, flatShading: true })
+        );
+        wood.castShadow = true;
+        wood.receiveShadow = true;
+        group.add(wood);
+    } else if (style === 'stone') {
+        const stone = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: 0x475569, flatShading: true })
+        );
+        stone.castShadow = true;
+        stone.receiveShadow = true;
+        group.add(stone);
+    } else if (style === 'pipe') {
+        // Tronco oco de árvore com musgo no topo
+        const body = new THREE.Mesh(
+            new THREE.CylinderGeometry(w * 0.45, w * 0.5, h - 0.5, 9),
+            new THREE.MeshLambertMaterial({ color: 0x92400e, flatShading: true })
+        );
+        body.position.y = -0.25;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        group.add(body);
+
+        const rim = new THREE.Mesh(
+            new THREE.CylinderGeometry(w * 0.5, w * 0.47, 0.5, 9),
+            new THREE.MeshLambertMaterial({ color: 0x65a30d, flatShading: true })
+        );
+        rim.position.y = h / 2 - 0.25;
+        rim.castShadow = true;
+        group.add(rim);
+
+        const hole = new THREE.Mesh(
+            new THREE.CylinderGeometry(w * 0.34, w * 0.34, 0.52, 9),
+            new THREE.MeshBasicMaterial({ color: 0x3b1d0a })
+        );
+        hole.position.y = h / 2 - 0.24;
+        group.add(hole);
+    }
+
+    worldGroup.add(group);
+
+    const plat = {
+        x, y, z, w, h, d,
+        baseX: x, baseY: y, baseZ: z,
+        dx: 0, dy: 0, dz: 0,
+        style,
+        used: false,
+        bounceOffset: 0,
+        moveAxis: options.moveAxis || null,
+        moveRange: options.moveRange || 0,
+        moveSpeed: options.moveSpeed || 1.5,
+        movePhase: options.movePhase || 0,
+        mesh: group
+    };
+    GAME.platforms.push(plat);
+    return plat;
+}
+
+function addCoin(x, y, z) {
+    const geo = new THREE.CylinderGeometry(0.42, 0.42, 0.14, 12);
+    geo.rotateX(Math.PI / 2);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xfacc15, emissive: 0xca8a04, emissiveIntensity: 0.35 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    worldGroup.add(mesh);
+
+    GAME.coinsList.push({ x, y, z, mesh, collected: false });
+}
+
+function addCoinArc(x1, y1, z1, x2, y2, z2, count = 5, arcHeight = 2.2) {
+    for (let i = 0; i < count; i++) {
+        const t = i / (count - 1);
+        const x = THREE.MathUtils.lerp(x1, x2, t);
+        const z = THREE.MathUtils.lerp(z1, z2, t);
+        const y = THREE.MathUtils.lerp(y1, y2, t) + Math.sin(t * Math.PI) * arcHeight;
+        addCoin(x, y, z);
+    }
+}
+
+function addStar(x, y, z) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    // Estrela 3D feita com dois tetraedros cruzados + brilho
+    const starMat = new THREE.MeshLambertMaterial({ color: 0xfef08a, emissive: 0xf59e0b, emissiveIntensity: 0.65 });
+    const oct1 = new THREE.Mesh(new THREE.OctahedronGeometry(0.85, 0), starMat);
+    const oct2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.85, 0), starMat);
+    oct2.rotation.y = Math.PI / 4;
+    oct2.rotation.z = Math.PI / 4;
+    group.add(oct1, oct2);
+
+    // Anel de brilho em volta da estrela
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.05, 6, 24), new THREE.MeshBasicMaterial({ color: 0xfde047 }));
+    group.add(halo);
+
+    worldGroup.add(group);
+    GAME.starsList.push({ x, y, z, mesh: group, collected: false });
+}
+
+function addEnemy(x, y, z, type = 'besouro', patrolAxis = 'x', patrolRange = 4) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    if (type === 'besouro') {
+        // Besouro roxo de casco brilhante, antenas e 6 perninhas
+        const casco = new THREE.Mesh(
+            new THREE.SphereGeometry(0.55, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshLambertMaterial({ color: 0x7e22ce, flatShading: true })
+        );
+        casco.scale.set(1, 0.9, 1.25);
+        casco.position.y = 0.3;
+        casco.castShadow = true;
+        group.add(casco);
+
+        const risca = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.52, 1.36), new THREE.MeshLambertMaterial({ color: 0x3b0764 }));
+        risca.position.y = 0.42;
+        group.add(risca);
+
+        const barriga = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.14, 10), new THREE.MeshLambertMaterial({ color: 0x1e1b4b }));
+        barriga.scale.z = 1.25;
+        barriga.position.y = 0.26;
+        group.add(barriga);
+
+        const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), new THREE.MeshLambertMaterial({ color: 0x1e1b4b, flatShading: true }));
+        cabeca.position.set(0, 0.36, 0.68);
+        group.add(cabeca);
+
+        // Olhos bravos
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+        [-0.1, 0.1].forEach(ex => {
+            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.06), eyeMat);
+            eye.position.set(ex, 0.42, 0.89);
+            group.add(eye);
+        });
+        // Antenas
+        [-1, 1].forEach(sd => {
+            const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4), new THREE.MeshLambertMaterial({ color: 0x1e1b4b }));
+            ant.position.set(sd * 0.1, 0.62, 0.8);
+            ant.rotation.set(0.6, 0, -sd * 0.4);
+            group.add(ant);
+        });
+        // Perninhas
+        for (let k = -1; k <= 1; k++) {
+            [-1, 1].forEach(sd => {
+                const perna = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.06), new THREE.MeshLambertMaterial({ color: 0x1e1b4b }));
+                perna.position.set(sd * 0.55, 0.14, k * 0.35);
+                perna.rotation.z = sd * 0.5;
+                group.add(perna);
+            });
+        }
+    } else {
+        // Caracol de casco espiral laranja e antenas com olhos
+        const corpo = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 0.3, 1.3),
+            new THREE.MeshLambertMaterial({ color: 0x5eead4, flatShading: true })
+        );
+        corpo.position.set(0, 0.15, 0.1);
+        group.add(corpo);
+
+        const pescoco = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.36), new THREE.MeshLambertMaterial({ color: 0x5eead4, flatShading: true }));
+        pescoco.position.set(0, 0.45, 0.6);
+        group.add(pescoco);
+
+        const shell = new THREE.Mesh(
+            new THREE.TorusGeometry(0.36, 0.2, 8, 14),
+            new THREE.MeshLambertMaterial({ color: 0xf97316, flatShading: true })
+        );
+        shell.rotation.y = Math.PI / 2;
+        shell.position.set(0, 0.68, -0.15);
+        shell.castShadow = true;
+        group.add(shell);
+        const miolo = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshLambertMaterial({ color: 0xc2410c, flatShading: true }));
+        miolo.scale.x = 1.6;
+        miolo.position.set(0, 0.68, -0.15);
+        group.add(miolo);
+
+        [-1, 1].forEach(sd => {
+            const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 4), new THREE.MeshLambertMaterial({ color: 0x5eead4 }));
+            haste.position.set(sd * 0.12, 0.9, 0.66);
+            haste.rotation.z = -sd * 0.25;
+            group.add(haste);
+            const olho = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            olho.position.set(sd * 0.18, 1.14, 0.66);
+            group.add(olho);
+            const pupila = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), new THREE.MeshBasicMaterial({ color: 0x111827 }));
+            pupila.position.set(sd * 0.18, 1.14, 0.73);
+            group.add(pupila);
+        });
+    }
+
+    worldGroup.add(group);
+    GAME.enemies.push({
+        x, y, z,
+        startX: x, startZ: z,
+        type,
+        patrolAxis,
+        patrolRange,
+        dir: 1,
+        speed: type === 'besouro' ? 2.6 : 3.2,
+        alive: true,
+        squishTimer: 0,
+        mesh: group
+    });
+}
+
+function addGoalCastle(x, y, z) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    // Base de pedra do mastro
+    const base = new THREE.Mesh(
+        new THREE.BoxGeometry(1.4, 0.8, 1.4),
+        new THREE.MeshLambertMaterial({ color: 0x64748b })
+    );
+    base.position.y = 0.4;
+    group.add(base);
+
+    // Mastro branco alto
+    const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 8.5, 8),
+        new THREE.MeshLambertMaterial({ color: 0xf8fafc })
+    );
+    pole.position.y = 4.6;
+    pole.castShadow = true;
+    group.add(pole);
+
+    // Esfera dourada no topo
+    const topBall = new THREE.Mesh(
+        new THREE.SphereGeometry(0.32, 10, 10),
+        new THREE.MeshLambertMaterial({ color: 0xfacc15 })
+    );
+    topBall.position.y = 9.0;
+    group.add(topBall);
+
+    // Bandeira verde triangular
+    const flag = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 1.1, 0.1),
+        new THREE.MeshLambertMaterial({ color: 0x22c55e })
+    );
+    flag.position.set(0.95, 8.1, 0);
+    group.add(flag);
+
+    // Cabana de madeira logo atrás da bandeira
+    const castleWall = new THREE.Mesh(
+        new THREE.BoxGeometry(5.5, 4.2, 4.5),
+        new THREE.MeshLambertMaterial({ color: 0xb45309, flatShading: true })
+    );
+    castleWall.position.set(0, 2.1, -5.2);
+    castleWall.castShadow = true;
+    group.add(castleWall);
+
+    const door = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 2.2, 0.3),
+        new THREE.MeshLambertMaterial({ color: 0x451a03 })
+    );
+    door.position.set(0, 1.1, -2.9);
+    group.add(door);
+
+    const roof = new THREE.Mesh(
+        new THREE.ConeGeometry(3.8, 2.5, 4),
+        new THREE.MeshLambertMaterial({ color: 0x15803d, flatShading: true })
+    );
+    roof.rotation.y = Math.PI / 4;
+    roof.position.set(0, 5.4, -5.2);
+    group.add(roof);
+
+    worldGroup.add(group);
+    GAME.goalPole = { x, y, z, flag, reached: false };
+}
+
+function addCloudsAndTrees(includeTrees = true) {
+    // Nuvens fofas Low-Poly flutuando no céu
+    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    for (let i = 0; i < 16; i++) {
+        const cGroup = new THREE.Group();
+        const puffs = 3 + Math.floor(Math.random() * 2);
+        for (let p = 0; p < puffs; p++) {
+            const box = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 2.2), cloudMat);
+            box.position.set((p - 1) * 1.6, Math.sin(p) * 0.3, (Math.random() - 0.5) * 0.8);
+            cGroup.add(box);
+        }
+        cGroup.position.set(
+            (Math.random() - 0.5) * 90,
+            16 + Math.random() * 12,
+            -i * 9 + 15
+        );
+        worldGroup.add(cGroup);
+        GAME.decorations.push({ mesh: cGroup, speed: 0.6 + Math.random() * 0.6 });
+    }
+
+    if (includeTrees) {
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+        const leafMat = new THREE.MeshLambertMaterial({ color: 0x15803d, flatShading: true });
+        const treeCoords = [
+            [-5.5, 0, -4], [5.5, 0, -8], [-6, 0, -18],
+            [6.5, 0, -26], [-5.5, 0, -48], [6, 0, -54]
+        ];
+        treeCoords.forEach(([tx, ty, tz]) => {
+            const t = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 2.0, 7), trunkMat);
+            trunk.position.y = 1.0;
+            t.add(trunk);
+            const crown = new THREE.Mesh(new THREE.ConeGeometry(1.7, 3.2, 7), leafMat);
+            crown.position.y = 3.2;
+            crown.castShadow = true;
+            t.add(crown);
+            t.position.set(tx, ty, tz);
+            worldGroup.add(t);
+        });
+    }
+}
+
+// ==========================================
+// 6. DESIGN DAS 3 FASES PROGRESSIVAS
+// ==========================================
+function loadLevel(index) {
+    clearLevel();
+    GAME.currentLevel = index;
+
+    if (index === 0) {
+        // FASE 1: COLINAS DO REINO
+        document.getElementById('hud-level-name').textContent = '1-1 Colinas do Reino';
+        scene.background = new THREE.Color(0x38bdf8);
+        scene.fog = new THREE.Fog(0x38bdf8, 55, 160);
+        addCloudsAndTrees(true);
+
+        // Ilha Inicial ampla
+        addPlatform(0, -1, -6, 16, 2, 22, 'grass');
+        GAME.checkpoint.set(0, 1, 2);
+
+        // Blocos de Cristal e Tijolo no início
+        addPlatform(-2.5, 3.2, -6, 1.3, 1.3, 1.3, 'question');
+        addPlatform(0, 3.2, -6, 1.3, 1.3, 1.3, 'brick');
+        addPlatform(2.5, 3.2, -6, 1.3, 1.3, 1.3, 'question');
+
+        // Tronco oco + 1ª Estrela no alto
+        addPlatform(-5, 1.2, -12, 2.2, 2.4, 2.2, 'pipe');
+        addStar(-5, 3.6, -12);
+
+        addEnemy(0, 0, -12, 'besouro', 'x', 4.5);
+
+        // Degraus de Colinas Elevadas
+        addPlatform(0, 0.5, -23, 12, 3, 10, 'grass');
+        addCoinArc(0, 2.5, -19, 0, 2.5, -26, 4, 1.5);
+        addEnemy(0, 2.0, -24, 'caracol', 'x', 4.0);
+
+        // Plataforma Elevada Lateral com 2ª Estrela
+        addPlatform(9, 2.8, -28, 5, 1.5, 5, 'grass');
+        addStar(9, 4.6, -28);
+
+        // Ponte de Madeira sobre o abismo
+        addPlatform(0, 1.5, -35, 3.6, 0.8, 12, 'wood');
+        addCoin(0, 2.8, -33);
+        addCoin(0, 2.8, -37);
+
+        // Platô Final com Blocos Surpresa e 3ª Estrela elevada
+        addPlatform(0, 0.5, -52, 18, 3, 20, 'grass');
+        addPlatform(0, 4.8, -48, 1.4, 1.4, 1.4, 'question');
+        addPlatform(-6, 3.5, -52, 4, 1, 4, 'brick');
+        addStar(-6, 5.2, -52);
+        addEnemy(3, 2.0, -49, 'besouro', 'x', 4);
+
+        // Bandeira Final
+        addGoalCastle(0, 2.0, -58);
+
+    } else if (index === 1) {
+        // FASE 2: ILHAS FLUTUANTES NO CÉU
+        document.getElementById('hud-level-name').textContent = '1-2 Ilhas no Céu';
+        scene.background = new THREE.Color(0x0ea5e9);
+        scene.fog = new THREE.Fog(0x0ea5e9, 55, 165);
+        addCloudsAndTrees(false);
+
+        // Ilha Inicial
+        addPlatform(0, -1, 0, 12, 2, 12, 'grass');
+        GAME.checkpoint.set(0, 1, 2);
+        addPlatform(0, 3.2, -2, 1.3, 1.3, 1.3, 'question');
+
+        // Plataforma Móvel Horizontal 1
+        addPlatform(0, 0, -12, 4.5, 1, 4.5, 'wood', { moveAxis: 'x', moveRange: 5.5, moveSpeed: 1.8 });
+        addCoin(0, 1.5, -12);
+
+        // Ilha Intermediária com Inimigo + 1ª Estrela
+        addPlatform(0, 1, -24, 11, 2, 11, 'grass');
+        addEnemy(0, 2.0, -24, 'caracol', 'x', 3.8);
+        addPlatform(-6.5, 3.5, -24, 3.5, 1, 3.5, 'brick');
+        addStar(-6.5, 5.2, -24);
+
+        // Elevador Vertical + Plataformas em Sequência
+        addPlatform(0, 2.5, -35, 4.2, 1, 4.2, 'wood', { moveAxis: 'y', moveRange: 2.8, moveSpeed: 1.7 });
+        addCoinArc(0, 5.5, -39, 0, 5.5, -45, 4, 1.6);
+
+        // Ilha Alta com 2ª Estrela
+        addPlatform(0, 4.0, -48, 12, 2, 12, 'grass');
+        addPlatform(3.5, 7.2, -48, 1.3, 1.3, 1.3, 'question');
+        addEnemy(-2, 5.0, -48, 'besouro', 'z', 3.5);
+        addPlatform(8, 6.2, -50, 3.8, 1, 3.8, 'wood');
+        addStar(8, 8.0, -50);
+
+        // Plataforma Móvel Z até a Ilha Final
+        addPlatform(0, 4.0, -61, 4.5, 1, 4.5, 'wood', { moveAxis: 'z', moveRange: 4.5, moveSpeed: 1.9 });
+
+        // Ilha Final + 3ª Estrela no topo dos troncos
+        addPlatform(0, 4.0, -76, 16, 2, 18, 'grass');
+        addPlatform(-5, 6.2, -73, 2.2, 2.4, 2.2, 'pipe');
+        addStar(-5, 8.6, -73);
+        addGoalCastle(0, 5.0, -81);
+
+    } else if (index === 2) {
+        // FASE 3: FORTALEZA DE LAVA
+        document.getElementById('hud-level-name').textContent = '1-3 Fortaleza de Lava';
+        scene.background = new THREE.Color(0x450a0a);
+        scene.fog = new THREE.Fog(0x450a0a, 50, 155);
+
+        // Mar de Lava brilhante abaixo das plataformas (y = -4.5)
+        GAME.lavaY = -4.5;
+        const lavaPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(240, 240),
+            new THREE.MeshBasicMaterial({ color: 0xf97316 })
+        );
+        lavaPlane.rotation.x = -Math.PI / 2;
+        lavaPlane.position.set(0, -4.5, -45);
+        worldGroup.add(lavaPlane);
+
+        // Plataforma Inicial de Pedra
+        addPlatform(0, -1, 0, 12, 2, 12, 'stone');
+        GAME.checkpoint.set(0, 1, 2);
+        addPlatform(-2.5, 3.0, -2, 1.3, 1.3, 1.3, 'question');
+        addPlatform(2.5, 3.0, -2, 1.3, 1.3, 1.3, 'question');
+
+        // Ponte Estreita com Inimigos
+        addPlatform(0, -0.5, -14, 4.2, 1.2, 14, 'brick');
+        addEnemy(0, 0.1, -12, 'besouro', 'x', 1.4);
+        addEnemy(0, 0.1, -18, 'caracol', 'x', 1.4);
+
+        // Desvio Lateral para 1ª Estrela
+        addPlatform(-7.5, 1.2, -16, 4, 1, 4, 'stone');
+        addStar(-7.5, 2.9, -16);
+
+        // Plataformas Móveis Cruzadas sobre a Lava
+        addPlatform(-3.5, 0.5, -27, 4.2, 1, 4.2, 'stone', { moveAxis: 'x', moveRange: 4.5, moveSpeed: 2.1, movePhase: 0 });
+        addPlatform(3.5, 1.5, -36, 4.2, 1, 4.2, 'stone', { moveAxis: 'x', moveRange: 4.5, moveSpeed: 2.1, movePhase: Math.PI });
+        addCoin(0, 3.0, -31.5);
+
+        // Salão Central da Fortaleza + 2ª Estrela
+        addPlatform(0, 1.5, -49, 14, 2, 14, 'stone');
+        addEnemy(-3, 2.5, -48, 'caracol', 'x', 4.5);
+        addEnemy(3, 2.5, -51, 'besouro', 'x', 4.5);
+        addPlatform(0, 5.2, -49, 3.5, 1, 3.5, 'brick');
+        addStar(0, 7.0, -49);
+
+        // Elevador Final até o Altar da Estrela Suprema
+        addPlatform(0, 3.2, -62, 4.5, 1, 4.5, 'wood', { moveAxis: 'y', moveRange: 3.0, moveSpeed: 2.0 });
+        addCoinArc(0, 6.5, -65, 0, 6.5, -70, 4, 1.5);
+
+        // Altar Final
+        addPlatform(0, 5.0, -79, 16, 2, 18, 'stone');
+        addPlatform(5.5, 7.2, -76, 3.5, 1, 3.5, 'brick');
+        addStar(5.5, 9.0, -76);
+        addGoalCastle(0, 6.0, -84);
+    }
+
+    resetPlayerToCheckpoint();
+    updateHUD();
+}
+
+function resetPlayerToCheckpoint() {
+    player.pos.copy(GAME.checkpoint);
+    player.vel.set(0, 0, 0);
+    player.yaw = Math.PI; // Olha para frente (-Z)
+    player.grounded = false;
+    player.canDoubleJump = true;
+    player.isDoubleJumping = false;
+    camState.yaw = 0;
+}
+
+// ==========================================
+// 7. CONTROLES (TECLADO, MOUSE E TOUCH MOBILE)
+// ==========================================
+const keys = {};
+const touchInput = {
+    moveX: 0,
+    moveZ: 0,
+    joyTouchId: null,
+    camTouchId: null,
+    lastCamX: 0,
+    lastCamY: 0,
+    run: false
+};
+
+const camState = {
+    yaw: 0,
+    pitch: 0.38,
+    distance: 11.5,
+    currentPos: new THREE.Vector3(),
+    currentLook: new THREE.Vector3()
+};
+
+function triggerJumpInput() {
+    if (GAME.state !== 'PLAYING') return;
+    player.jumpBufferTimer = 0.16;
+}
+
+window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+    if (e.code === 'Space') {
+        e.preventDefault();
+        triggerJumpInput();
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+});
+
+// Arraste do mouse no PC para girar câmera
+let isMouseDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+canvas.addEventListener('mousedown', (e) => {
+    if (GAME.state === 'PLAYING') {
+        isMouseDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    }
+});
+window.addEventListener('mousemove', (e) => {
+    if (isMouseDragging && GAME.state === 'PLAYING') {
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        camState.yaw -= dx * 0.006;
+        camState.pitch = Math.max(0.15, Math.min(0.85, camState.pitch + dy * 0.004));
+    }
+});
+window.addEventListener('mouseup', () => {
+    isMouseDragging = false;
+});
+
+// Botões de rotação rápida de câmera no HUD
+document.getElementById('btn-cam-left').addEventListener('click', () => { camState.yaw += Math.PI / 4; });
+document.getElementById('btn-cam-right').addEventListener('click', () => { camState.yaw -= Math.PI / 4; });
+document.getElementById('btn-mute').addEventListener('click', () => sfx.toggleMute());
+
+// Joystick Touch Virtual (Esquerda)
+const joyArea = document.getElementById('joystick-area');
+const joyStick = document.getElementById('joystick-stick');
+
+joyArea.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    touchInput.joyTouchId = t.identifier;
+    handleJoystickMove(t);
+}, { passive: false });
+
+joyArea.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (let t of e.changedTouches) {
+        if (t.identifier === touchInput.joyTouchId) handleJoystickMove(t);
+    }
+}, { passive: false });
+
+joyArea.addEventListener('touchend', (e) => {
+    for (let t of e.changedTouches) {
+        if (t.identifier === touchInput.joyTouchId) {
+            touchInput.joyTouchId = null;
+            touchInput.moveX = 0;
+            touchInput.moveZ = 0;
+            joyStick.style.transform = 'translate(0px, 0px)';
+        }
+    }
+});
+
+function handleJoystickMove(touch) {
+    const rect = joyArea.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const maxRadius = rect.width / 2 - 22;
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+    }
+    joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
+    touchInput.moveX = dx / maxRadius;
+    touchInput.moveZ = dy / maxRadius;
+}
+
+// Zona de toque para girar câmera no mobile/tablet
+const camTouchZone = document.getElementById('camera-touch-zone');
+camTouchZone.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    touchInput.camTouchId = t.identifier;
+    touchInput.lastCamX = t.clientX;
+    touchInput.lastCamY = t.clientY;
+}, { passive: false });
+
+camTouchZone.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (let t of e.changedTouches) {
+        if (t.identifier === touchInput.camTouchId) {
+            const dx = t.clientX - touchInput.lastCamX;
+            const dy = t.clientY - touchInput.lastCamY;
+            touchInput.lastCamX = t.clientX;
+            touchInput.lastCamY = t.clientY;
+            camState.yaw -= dx * 0.007;
+            camState.pitch = Math.max(0.15, Math.min(0.85, camState.pitch + dy * 0.005));
+        }
+    }
+}, { passive: false });
+
+camTouchZone.addEventListener('touchend', (e) => {
+    for (let t of e.changedTouches) {
+        if (t.identifier === touchInput.camTouchId) touchInput.camTouchId = null;
+    }
+});
+
+// Botões Touch de Pulo e Corrida
+const btnTouchJump = document.getElementById('touch-btn-jump');
+btnTouchJump.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    btnTouchJump.classList.add('pressed');
+    triggerJumpInput();
+}, { passive: false });
+btnTouchJump.addEventListener('touchend', () => btnTouchJump.classList.remove('pressed'));
+
+const btnTouchRun = document.getElementById('touch-btn-run');
+btnTouchRun.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    btnTouchRun.classList.add('pressed');
+    touchInput.run = true;
+}, { passive: false });
+btnTouchRun.addEventListener('touchend', () => {
+    btnTouchRun.classList.remove('pressed');
+    touchInput.run = false;
+});
+
+// ==========================================
+// 8. PARTÍCULAS E EFEITOS VISUAIS
+// ==========================================
+function spawnSparkles(pos, color = 0xfacc15, count = 8) {
+    const geo = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    for (let i = 0; i < count; i++) {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        worldGroup.add(mesh);
+        GAME.particles.push({
+            mesh,
+            vel: new THREE.Vector3(
+                (Math.random() - 0.5) * 7,
+                Math.random() * 6 + 2,
+                (Math.random() - 0.5) * 7
+            ),
+            life: 0.45
+        });
+    }
+}
+
+function showFloatingBanner(text) {
+    const banner = document.getElementById('floating-banner');
+    banner.firstElementChild.textContent = text;
+    banner.classList.remove('opacity-0', 'scale-90');
+    banner.classList.add('opacity-100', 'scale-100');
+    clearTimeout(banner._t);
+    banner._t = setTimeout(() => {
+        banner.classList.remove('opacity-100', 'scale-100');
+        banner.classList.add('opacity-0', 'scale-90');
+    }, 1800);
+}
+
+// ==========================================
+// 9. FÍSICA 3D DO JOGADOR, PLATAFORMAS E INIMIGOS
+// ==========================================
+function updatePlatforms(dt, elapsed) {
+    for (let p of GAME.platforms) {
+        const prevX = p.x;
+        const prevY = p.y;
+        const prevZ = p.z;
+
+        if (p.moveAxis === 'x') {
+            p.x = p.baseX + Math.sin(elapsed * p.moveSpeed + p.movePhase) * p.moveRange;
+        } else if (p.moveAxis === 'y') {
+            p.y = p.baseY + Math.sin(elapsed * p.moveSpeed + p.movePhase) * p.moveRange;
+        } else if (p.moveAxis === 'z') {
+            p.z = p.baseZ + Math.sin(elapsed * p.moveSpeed + p.movePhase) * p.moveRange;
+        }
+
+        // Animação de pulo ao bater por baixo no bloco surpresa
+        if (p.bounceOffset > 0) {
+            p.bounceOffset = Math.max(0, p.bounceOffset - dt * 3.5);
+        }
+
+        p.dx = p.x - prevX;
+        p.dy = p.y - prevY;
+        p.dz = p.z - prevZ;
+
+        p.mesh.position.set(p.x, p.y + Math.sin(p.bounceOffset * Math.PI) * 0.4, p.z);
+    }
+}
+
+function updatePlayer(dt) {
+    if (player.invulnTimer > 0) player.invulnTimer -= dt;
+
+    // Acompanha o deslocamento se estiver em cima de uma plataforma móvel
+    if (player.grounded && player.standingPlatform) {
+        player.pos.x += player.standingPlatform.dx;
+        player.pos.y += player.standingPlatform.dy;
+        player.pos.z += player.standingPlatform.dz;
+    }
+
+    // Rotação de câmera pelo teclado (Q / E)
+    if (keys['KeyQ']) camState.yaw += 2.2 * dt;
+    if (keys['KeyE']) camState.yaw -= 2.2 * dt;
+
+    // Leitura de direção (Teclado + Joystick Touch)
+    let rawX = 0;
+    let rawZ = 0;
+    if (keys['KeyA'] || keys['ArrowLeft']) rawX -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) rawX += 1;
+    if (keys['KeyW'] || keys['ArrowUp']) rawZ -= 1;
+    if (keys['KeyS'] || keys['ArrowDown']) rawZ += 1;
+
+    if (Math.abs(touchInput.moveX) > 0.1) rawX += touchInput.moveX;
+    if (Math.abs(touchInput.moveZ) > 0.1) rawZ += touchInput.moveZ;
+
+    const inputVec = new THREE.Vector2(rawX, rawZ);
+    if (inputVec.length() > 1) inputVec.normalize();
+
+    const isRunning = !!(keys['ShiftLeft'] || keys['ShiftRight'] || touchInput.run);
+    const maxSpeed = isRunning ? 11.2 : 7.8;
+
+    // Converte input relativo ao ângulo da câmera
+    const sinCam = Math.sin(camState.yaw);
+    const cosCam = Math.cos(camState.yaw);
+    const moveWorldX = inputVec.x * cosCam + inputVec.y * sinCam;
+    const moveWorldZ = -inputVec.x * sinCam + inputVec.y * cosCam;
+
+    const accel = player.grounded ? 48 : 26;
+    const friction = player.grounded ? 12 : 3.5;
+
+    if (inputVec.length() > 0.05) {
+        player.vel.x += moveWorldX * accel * dt;
+        player.vel.z += moveWorldZ * accel * dt;
+
+        // Suaviza rotação do personagem na direção do movimento
+        const targetYaw = Math.atan2(moveWorldX, moveWorldZ);
+        let diff = targetYaw - player.yaw;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        player.yaw += diff * Math.min(1, dt * 14);
+    } else {
+        player.vel.x -= player.vel.x * Math.min(1, friction * dt);
+        player.vel.z -= player.vel.z * Math.min(1, friction * dt);
+    }
+
+    // Limita velocidade horizontal
+    const horizSpeed = Math.hypot(player.vel.x, player.vel.z);
+    if (horizSpeed > maxSpeed) {
+        player.vel.x = (player.vel.x / horizSpeed) * maxSpeed;
+        player.vel.z = (player.vel.z / horizSpeed) * maxSpeed;
+    }
+
+    // Coyote Time & Jump Buffer (torna os saltos super responsivos)
+    if (player.grounded) {
+        player.coyoteTimer = 0.14;
+        player.canDoubleJump = true;
+        player.isDoubleJumping = false;
+        player.spinAngle = 0;
+    } else {
+        player.coyoteTimer = Math.max(0, player.coyoteTimer - dt);
+    }
+
+    if (player.jumpBufferTimer > 0) {
+        player.jumpBufferTimer -= dt;
+        if (player.coyoteTimer > 0) {
+            // Pulo normal do chão
+            player.vel.y = 13.8;
+            player.grounded = false;
+            player.coyoteTimer = 0;
+            player.jumpBufferTimer = 0;
+            sfx.playJump(false);
+            spawnSparkles(player.pos, 0xffffff, 5);
+        } else if (player.canDoubleJump) {
+            // Pulo duplo aéreo com giro!
+            player.vel.y = 12.6;
+            player.canDoubleJump = false;
+            player.isDoubleJumping = true;
+            player.jumpBufferTimer = 0;
+            sfx.playJump(true);
+            spawnSparkles(player.pos, 0xfef08a, 7);
+        }
+    }
+
+    // Gravidade
+    player.vel.y -= 32.0 * dt;
+
+    // Resolução de Colisão 3D Separada por Eixo (X -> Z -> Y)
+    const r = player.radius;
+    const h = player.height;
+
+    // Eixo X
+    player.pos.x += player.vel.x * dt;
+    for (let p of GAME.platforms) {
+        if (overlapAABB(player.pos, r, h, p)) {
+            if (player.vel.x > 0) player.pos.x = p.x - p.w / 2 - r;
+            else if (player.vel.x < 0) player.pos.x = p.x + p.w / 2 + r;
+            player.vel.x = 0;
+        }
+    }
+
+    // Eixo Z
+    player.pos.z += player.vel.z * dt;
+    for (let p of GAME.platforms) {
+        if (overlapAABB(player.pos, r, h, p)) {
+            if (player.vel.z > 0) player.pos.z = p.z - p.d / 2 - r;
+            else if (player.vel.z < 0) player.pos.z = p.z + p.d / 2 + r;
+            player.vel.z = 0;
+        }
+    }
+
+    // Eixo Y
+    player.pos.y += player.vel.y * dt;
+    player.grounded = false;
+    player.standingPlatform = null;
+
+    for (let p of GAME.platforms) {
+        if (overlapAABB(player.pos, r, h, p)) {
+            if (player.vel.y <= 0) {
+                // Pousou em cima da plataforma
+                player.pos.y = p.y + p.h / 2;
+                player.vel.y = 0;
+                player.grounded = true;
+                player.standingPlatform = p;
+            } else if (player.vel.y > 0) {
+                // Bateu a cabeça por baixo do bloco!
+                player.pos.y = p.y - p.h / 2 - h;
+                player.vel.y = -2;
+                onHitBlockFromBelow(p);
+            }
+        }
+    }
+
+    // Verifica queda no abismo ou toque na lava
+    const fallLimit = GAME.lavaY !== null ? GAME.lavaY + 0.3 : -14;
+    if (player.pos.y < fallLimit) {
+        hurtPlayer(true);
+    }
+
+    // Atualiza Malha 3D e Animação Procedural do Herói
+    heroMesh.root.position.copy(player.pos);
+    heroMesh.root.rotation.y = player.yaw;
+
+    // Pisca quando invulnerável após dano
+    heroMesh.root.visible = player.invulnTimer <= 0 || (Math.floor(player.invulnTimer * 18) % 2 === 0);
+
+    // Giro no ar durante pulo duplo
+    if (player.isDoubleJumping && !player.grounded) {
+        player.spinAngle += dt * 16;
+        heroMesh.model.rotation.y = player.spinAngle;
+    } else {
+        heroMesh.model.rotation.y = 0;
+    }
+
+    // Animação de Corrida / Pulo nos membros
+    if (!player.grounded) {
+        heroMesh.leftArm.rotation.x = -2.4; // Braço levantado clássico no pulo!
+        heroMesh.rightArm.rotation.x = 0.6;
+        heroMesh.leftLeg.rotation.x = -0.5;
+        heroMesh.rightLeg.rotation.x = 0.5;
+    } else if (horizSpeed > 0.4) {
+        player.walkTimer += dt * (isRunning ? 16 : 11);
+        const swing = Math.sin(player.walkTimer) * 0.75;
+        heroMesh.leftLeg.rotation.x = swing;
+        heroMesh.rightLeg.rotation.x = -swing;
+        heroMesh.leftArm.rotation.x = -swing * 0.85;
+        heroMesh.rightArm.rotation.x = swing * 0.85;
+    } else {
+        heroMesh.leftLeg.rotation.x = 0;
+        heroMesh.rightLeg.rotation.x = 0;
+        heroMesh.leftArm.rotation.x = 0;
+        heroMesh.rightArm.rotation.x = 0;
+    }
+
+    // Projeta a sombra circular diretamente na plataforma mais próxima abaixo do jogador
+    updateHeroDropShadow();
+}
+
+function overlapAABB(pos, r, h, p) {
+    return (
+        pos.x + r > p.x - p.w / 2 &&
+        pos.x - r < p.x + p.w / 2 &&
+        pos.y + h > p.y - p.h / 2 &&
+        pos.y < p.y + p.h / 2 &&
+        pos.z + r > p.z - p.d / 2 &&
+        pos.z - r < p.z + p.d / 2
+    );
+}
+
+function updateHeroDropShadow() {
+    let highestGround = -999;
+    for (let p of GAME.platforms) {
+        const topY = p.y + p.h / 2;
+        if (topY <= player.pos.y + 0.1 &&
+            Math.abs(player.pos.x - p.x) <= p.w / 2 + 0.25 &&
+            Math.abs(player.pos.z - p.z) <= p.d / 2 + 0.25) {
+            if (topY > highestGround) highestGround = topY;
+        }
+    }
+
+    if (highestGround > -50) {
+        heroMesh.dropShadow.visible = true;
+        heroMesh.dropShadow.position.set(player.pos.x, highestGround + 0.03, player.pos.z);
+        const heightAbove = Math.max(0, player.pos.y - highestGround);
+        const scale = Math.max(0.35, 1 - heightAbove * 0.08);
+        heroMesh.dropShadow.scale.set(scale, scale, 1);
+    } else {
+        heroMesh.dropShadow.visible = false;
+    }
+}
+
+function onHitBlockFromBelow(block) {
+    block.bounceOffset = 1.0;
+    sfx.playBlockHit();
+
+    if (block.style === 'question' && !block.used) {
+        block.used = true;
+        // Muda cor do bloco usado para marrom apagado
+        block.mesh.children[0].material.color.setHex(0x78350f);
+        if (block.mesh.children[1]) block.mesh.children[1].visible = false;
+        if (block.mesh.children[2]) block.mesh.children[2].visible = false;
+
+        GAME.coins += 3;
+        sfx.playCoin();
+        spawnSparkles(new THREE.Vector3(block.x, block.y + 1.2, block.z), 0xfacc15, 10);
+        updateHUD();
+    }
+}
+
+function updateCollectiblesAndEnemies(dt, elapsed) {
+    // Moedas girando
+    for (let c of GAME.coinsList) {
+        if (c.collected) continue;
+        c.mesh.rotation.y += dt * 3.5;
+        if (player.pos.distanceTo(new THREE.Vector3(c.x, c.y - 0.7, c.z)) < 1.25) {
+            c.collected = true;
+            c.mesh.visible = false;
+            GAME.coins++;
+            sfx.playCoin();
+            spawnSparkles(new THREE.Vector3(c.x, c.y, c.z), 0xfacc15, 6);
+            updateHUD();
+        }
+    }
+
+    // Estrelas brilhantes
+    for (let s of GAME.starsList) {
+        if (s.collected) continue;
+        s.mesh.rotation.y += dt * 2.2;
+        s.mesh.position.y = s.y + Math.sin(elapsed * 3.5) * 0.22;
+
+        if (player.pos.distanceTo(new THREE.Vector3(s.x, s.y - 0.8, s.z)) < 1.55) {
+            s.collected = true;
+            s.mesh.visible = false;
+            GAME.starsCollected++;
+            GAME.coins += 5;
+            sfx.playStar();
+            spawnSparkles(new THREE.Vector3(s.x, s.y, s.z), 0xfef08a, 18);
+            showFloatingBanner(`⭐ ESTRELA ${GAME.starsCollected}/3 COLETADA! ⭐`);
+            updateHUD();
+        }
+    }
+
+    // Inimigos Patrulheiros (Besouros e Caracóis)
+    for (let e of GAME.enemies) {
+        if (!e.alive) {
+            if (e.squishTimer > 0) {
+                e.squishTimer -= dt;
+                if (e.squishTimer <= 0) e.mesh.visible = false;
+            }
+            continue;
+        }
+
+        if (e.patrolAxis === 'x') {
+            e.x += e.dir * e.speed * dt;
+            if (Math.abs(e.x - e.startX) > e.patrolRange) e.dir *= -1;
+            e.mesh.rotation.y = e.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+        } else {
+            e.z += e.dir * e.speed * dt;
+            if (Math.abs(e.z - e.startZ) > e.patrolRange) e.dir *= -1;
+            e.mesh.rotation.y = e.dir > 0 ? 0 : Math.PI;
+        }
+        e.mesh.position.set(e.x, e.y, e.z);
+
+        // Colisão Jogador vs Inimigo
+        const dx = player.pos.x - e.x;
+        const dz = player.pos.z - e.z;
+        const horizDist = Math.hypot(dx, dz);
+
+        if (horizDist < 0.95 && player.pos.y < e.y + 1.0 && player.pos.y + player.height > e.y) {
+            // Se o jogador estiver caindo em cima da cabeça do inimigo -> ESMAGA!
+            if (player.vel.y < -0.5 && player.pos.y >= e.y + 0.35) {
+                e.alive = false;
+                e.squishTimer = 0.35;
+                e.mesh.scale.set(1.3, 0.25, 1.3);
+                player.vel.y = 13.5; // Quica mais alto!
+                player.canDoubleJump = true;
+                GAME.coins += 2;
+                sfx.playStomp();
+                spawnSparkles(new THREE.Vector3(e.x, e.y + 0.5, e.z), 0xffffff, 10);
+                updateHUD();
+            } else if (player.invulnTimer <= 0) {
+                // Sofre dano lateral
+                hurtPlayer(false);
+                const push = new THREE.Vector2(dx, dz).normalize();
+                player.vel.x = push.x * 10;
+                player.vel.z = push.y * 10;
+                player.vel.y = 7;
+            }
+        }
+    }
+
+    // Mastro da Bandeira Final
+    if (GAME.goalPole && !GAME.goalPole.reached) {
+        const gp = GAME.goalPole;
+        const distToGoal = Math.hypot(player.pos.x - gp.x, player.pos.z - gp.z);
+        if (distToGoal < 1.6 && player.pos.y >= gp.y - 0.5 && player.pos.y <= gp.y + 9.5) {
+            gp.reached = true;
+            completeLevel();
+        }
+    }
+
+    // Nuvens flutuando
+    GAME.decorations.forEach(d => {
+        d.mesh.position.x += d.speed * dt;
+        if (d.mesh.position.x > 55) d.mesh.position.x = -55;
+    });
+
+    // Partículas
+    for (let i = GAME.particles.length - 1; i >= 0; i--) {
+        const pt = GAME.particles[i];
+        pt.life -= dt;
+        pt.vel.y -= 14 * dt;
+        pt.mesh.position.addScaledVector(pt.vel, dt);
+        const s = Math.max(0.01, pt.life / 0.45);
+        pt.mesh.scale.set(s, s, s);
+        if (pt.life <= 0) {
+            worldGroup.remove(pt.mesh);
+            GAME.particles.splice(i, 1);
+        }
+    }
+}
+
+function hurtPlayer(fellInPit) {
+    if (GAME.state !== 'PLAYING') return;
+    sfx.playHurt();
+    GAME.lives--;
+    player.invulnTimer = 1.6;
+    updateHUD();
+
+    if (GAME.lives <= 0) {
+        GAME.state = 'GAMEOVER';
+        showEndModal(false);
+    } else if (fellInPit) {
+        resetPlayerToCheckpoint();
+    }
+}
+
+function completeLevel() {
+    GAME.state = 'LEVEL_END';
+    sfx.playWin();
+    spawnSparkles(player.pos.clone().add(new THREE.Vector3(0, 2, 0)), 0xfacc15, 25);
+    setTimeout(() => showEndModal(true), 650);
+}
+
+// ==========================================
+// 10. CÂMERA 3D INTELIGENTE EM TERCEIRA PESSOA
+// ==========================================
+function updateCamera(dt) {
+    const horizontalDist = Math.cos(camState.pitch) * camState.distance;
+    const verticalDist = Math.sin(camState.pitch) * camState.distance + 1.8;
+
+    const targetCamX = player.pos.x + Math.sin(camState.yaw) * horizontalDist;
+    const targetCamZ = player.pos.z + Math.cos(camState.yaw) * horizontalDist;
+    const targetCamY = Math.max(player.pos.y + 1.5, player.pos.y + verticalDist);
+
+    const desiredPos = new THREE.Vector3(targetCamX, targetCamY, targetCamZ);
+    const desiredLook = new THREE.Vector3(player.pos.x, player.pos.y + 1.3, player.pos.z);
+
+    camState.currentPos.lerp(desiredPos, Math.min(1, dt * 8));
+    camState.currentLook.lerp(desiredLook, Math.min(1, dt * 12));
+
+    camera.position.copy(camState.currentPos);
+    camera.lookAt(camState.currentLook);
+}
+
+// ==========================================
+// 11. HUD, MENUS E FLUXO DE FASES
+// ==========================================
+function updateHUD() {
+    document.getElementById('hud-lives').textContent = Math.max(0, GAME.lives);
+    document.getElementById('hud-coins').textContent = GAME.coins;
+    document.getElementById('hud-stars').textContent = `${GAME.starsCollected}/${GAME.totalStarsInLevel}`;
+}
+
+function showEndModal(won) {
+    const modal = document.getElementById('end-modal');
+    const title = document.getElementById('end-title');
+    const sub = document.getElementById('end-subtitle');
+    const emoji = document.getElementById('end-emoji');
+    const btnNext = document.getElementById('btn-next-action');
+
+    document.getElementById('end-stars').textContent = `${GAME.starsCollected} / 3`;
+    document.getElementById('end-coins').textContent = GAME.coins;
+
+    if (won) {
+        const isLastLevel = GAME.currentLevel >= 2;
+        emoji.textContent = isLastLevel ? '👑' : '🏆';
+        title.textContent = isLastLevel ? 'REINO SALVO!' : 'FASE CONCLUÍDA!';
+        sub.textContent = isLastLevel
+            ? 'Parabéns! Você zerou todas as 3 fases do Reino dos Saltos!'
+            : 'Você alcançou a bandeira do castelo com sucesso!';
+        btnNext.textContent = isLastLevel ? 'Jogar de Novo' : 'Próxima Fase ➔';
+    } else {
+        emoji.textContent = '💫';
+        title.textContent = 'FIM DE JOGO';
+        sub.textContent = 'Suas vidas acabaram. Tente novamente!';
+        btnNext.textContent = 'Tentar Novamente';
+    }
+
+    modal.classList.remove('hidden');
+}
+
+// Seleção de card de fase no Menu
+let selectedMenuLevel = 0;
+document.querySelectorAll('.level-select-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.level-select-btn').forEach(b => {
+            b.classList.remove('border-yellow-300');
+            b.classList.add('border-white/60');
+        });
+        btn.classList.remove('border-white/60');
+        btn.classList.add('border-yellow-300');
+        selectedMenuLevel = parseInt(btn.dataset.level, 10);
+    });
+});
+
+function startLevelFlow(lvlIdx, resetStats = true) {
+    sfx.init();
+    if (resetStats) {
+        GAME.lives = 3;
+        GAME.coins = 0;
+    }
+    document.getElementById('main-menu').classList.add('hidden');
+    document.getElementById('end-modal').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+
+    if (GAME.isMobile) {
+        document.getElementById('touch-controls').classList.remove('hidden');
+        document.getElementById('pc-hint').classList.add('hidden');
+    }
+
+    loadLevel(lvlIdx);
+    camState.currentPos.set(player.pos.x, player.pos.y + 6, player.pos.z + 11);
+    GAME.state = 'PLAYING';
+}
+
+document.getElementById('btn-play-selected').addEventListener('click', () => {
+    startLevelFlow(selectedMenuLevel, true);
+});
+
+document.getElementById('btn-next-action').addEventListener('click', () => {
+    if (GAME.state === 'LEVEL_END') {
+        const next = (GAME.currentLevel + 1) % 3;
+        startLevelFlow(next, next === 0);
+    } else {
+        startLevelFlow(GAME.currentLevel, true);
+    }
+});
+
+function openLevelMenu() {
+    GAME.state = 'MENU';
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('touch-controls').classList.add('hidden');
+    document.getElementById('end-modal').classList.add('hidden');
+    document.getElementById('main-menu').classList.remove('hidden');
+}
+
+document.getElementById('btn-open-menu').addEventListener('click', openLevelMenu);
+document.getElementById('btn-modal-menu').addEventListener('click', openLevelMenu);
+
+// ==========================================
+// 12. LOOP PRINCIPAL DE ANIMAÇÃO
+// ==========================================
+let lastTime = performance.now();
+
+function animate(now) {
+    requestAnimationFrame(animate);
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    const elapsed = now * 0.001;
+    lastTime = now;
+
+    if (GAME.state === 'PLAYING') {
+        updatePlatforms(dt, elapsed);
+        updatePlayer(dt);
+        updateCollectiblesAndEnemies(dt, elapsed);
+        updateCamera(dt);
+    } else if (GAME.state === 'MENU') {
+        // Câmera panorâmica suave exibindo o cenário no fundo do menu
+        updatePlatforms(dt, elapsed);
+        const angle = elapsed * 0.25;
+        camera.position.set(Math.sin(angle) * 22, 11, -18 + Math.cos(angle) * 22);
+        camera.lookAt(0, 2, -22);
+    }
+
+    renderer.render(scene, camera);
+}
+
+window.onload = function () {
+    loadLevel(0);
+    animate(performance.now());
+};
+</script>
+</body>
+</html>

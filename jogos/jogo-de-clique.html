@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Jogo de Clique</title>
+<style>
+* { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+body {
+    background: #120a24;
+    color: #f4ecff;
+    text-align: center;
+    font-family: 'Press Start 2P', monospace, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    touch-action: manipulation;
+}
+h1 {
+    font-size: clamp(18px, 4.5vw, 26px);
+    color: #ffd23f;
+    text-shadow: 2px 2px 0 #ff3fa4;
+    margin: 10px 0;
+}
+.placar {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    font-size: 14px;
+    margin: 12px 0;
+}
+.placar span {
+    color: #2ee6ff;
+}
+.placar b {
+    color: #ffd23f;
+}
+#jogo {
+    width: min(90vw, 340px);
+    height: min(90vw, 340px);
+    background: #1d1038;
+    border: 3px solid #2ee6ff;
+    box-shadow: 0 0 20px rgba(46, 230, 255, 0.25), inset 0 0 30px rgba(0,0,0,0.5);
+    border-radius: 16px;
+    margin: 12px auto;
+    position: relative;
+    overflow: hidden;
+    touch-action: none;
+}
+#alvo {
+    width: 48px;
+    height: 48px;
+    background: radial-gradient(circle, #ff6b81, #ff3fa4 70%);
+    border: 3px solid #fff;
+    box-shadow: 0 0 16px #ff3fa4;
+    border-radius: 50%;
+    position: absolute;
+    cursor: pointer;
+    touch-action: none;
+    transition: transform 0.05s;
+}
+#alvo:active {
+    transform: scale(0.9);
+}
+button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 14px 28px;
+    margin: 10px;
+    background: #ffd23f;
+    color: #120a24;
+    border: 3px solid #000;
+    border-radius: 12px;
+    box-shadow: 0 4px 0 #b38f00;
+    cursor: pointer;
+    text-transform: uppercase;
+}
+button:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #b38f00;
+}
+#alvo.ouro{background:radial-gradient(circle,#fff6a8,#ffc400 70%);box-shadow:0 0 22px #ffd23f}
+.pop{position:absolute;font-size:14px;color:#ffd23f;pointer-events:none;animation:sobe .6s forwards;text-shadow:1px 1px 0 #000}
+@keyframes sobe{to{transform:translateY(-30px);opacity:0}}
+#jogo.erro{animation:treme .2s}
+@keyframes treme{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+#mensagem {
+    font-size: 14px;
+    color: #4dff7a;
+    min-height: 28px;
+    margin-top: 12px;
+}
+</style>
+</head>
+<body>
+
+<h1>🎯 JOGO DE CLIQUE</h1>
+
+<div class="placar">
+  <div>PONTOS: <b id="pontos">0</b></div>
+  <div>TEMPO: <b id="tempo">30</b>s</div>
+  <div>NÍVEL: <b id="nivel">1</b></div>
+</div>
+<div class="placar" style="margin-top:-4px">
+  <div>COMBO: <b id="combo">x1</b></div>
+  <div>RECORDE: <b id="recorde">0</b></div>
+</div>
+
+<button onclick="iniciar()">▶ Começar</button>
+
+<div id="jogo">
+  <div id="alvo"></div>
+</div>
+
+<div id="mensagem"></div>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+let pontos = 0;
+let tempo = 30;
+let intervalo = null;
+let jogando = false;
+let combo = 1, acertosSeguidos = 0, nivel = 1, fugaTimer = null, ultimoAcerto = 0;
+let recorde = 0;
+try { recorde = +(localStorage.getItem('clique-recorde') || 0); } catch (e) {}
+
+const alvo = document.getElementById("alvo");
+const jogo = document.getElementById("jogo");
+const pontosEl = document.getElementById("pontos");
+const tempoEl = document.getElementById("tempo");
+const msgEl = document.getElementById("mensagem");
+document.getElementById("recorde").innerText = recorde;
+
+// tamanho do alvo e tempo até ele fugir sozinho em cada nível
+function tamanhoAlvo() { return Math.max(26, 52 - (nivel - 1) * 4); }
+function tempoFuga() { return Math.max(650, 1900 - (nivel - 1) * 180); }
+
+function moverAlvo() {
+    const t = tamanhoAlvo();
+    alvo.style.width = alvo.style.height = t + "px";
+    // às vezes aparece um alvo dourado que vale mais
+    alvo.classList.toggle("ouro", jogando && Math.random() < 0.12);
+    const maxX = Math.max(10, jogo.clientWidth - t - 10);
+    const maxY = Math.max(10, jogo.clientHeight - t - 10);
+    alvo.style.left = (5 + Math.random() * maxX) + "px";
+    alvo.style.top = (5 + Math.random() * maxY) + "px";
+    clearTimeout(fugaTimer);
+    if (jogando && nivel >= 2) fugaTimer = setTimeout(() => { quebrarCombo(); moverAlvo(); }, tempoFuga());
+}
+
+function mostrarPop(txt, x, y) {
+    const p = document.createElement("div");
+    p.className = "pop"; p.textContent = txt;
+    p.style.left = x + "px"; p.style.top = y + "px";
+    jogo.appendChild(p);
+    setTimeout(() => p.remove(), 600);
+}
+
+function atualizarPlacar() {
+    pontosEl.innerText = pontos;
+    document.getElementById("nivel").innerText = nivel;
+    document.getElementById("combo").innerText = "x" + combo;
+}
+
+function quebrarCombo() {
+    if (combo > 1) msgEl.innerText = "Combo perdido!";
+    combo = 1; acertosSeguidos = 0; atualizarPlacar();
+}
+
+function clicar(e) {
+    if (!jogando) return;
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const agora = performance.now();
+    acertosSeguidos++;
+    if (agora - ultimoAcerto > 1500) acertosSeguidos = 1;
+    ultimoAcerto = agora;
+    combo = Math.min(5, 1 + Math.floor(acertosSeguidos / 4));
+    const ouro = alvo.classList.contains("ouro");
+    const ganho = (ouro ? 3 : 1) * combo;
+    pontos += ganho;
+    if (ouro) { tempo += 2; tempoEl.innerText = tempo; SOM.item(); }
+    else SOM.tom(520 + combo * 120, 0.08, 'square', 0.05);
+    mostrarPop("+" + ganho + (ouro ? " ⏱+2" : ""), alvo.offsetLeft, alvo.offsetTop);
+    const novoNivel = 1 + Math.floor(pontos / 15);
+    if (novoNivel > nivel) { nivel = novoNivel; SOM.fase(); msgEl.innerText = "⬆️ Nível " + nivel + "! O alvo ficou menor e mais rápido!"; }
+    atualizarPlacar();
+    moverAlvo();
+}
+
+// clicar fora do alvo quebra o combo
+jogo.addEventListener('pointerdown', e => {
+    if (!jogando || e.target === alvo) return;
+    SOM.tom(150, 0.12, 'sawtooth', 0.05);
+    jogo.classList.remove("erro"); void jogo.offsetWidth; jogo.classList.add("erro");
+    quebrarCombo();
+});
+alvo.addEventListener('pointerdown', clicar);
+
+function iniciar() {
+    clearInterval(intervalo);
+    clearTimeout(fugaTimer);
+    pontos = 0; tempo = 30; nivel = 1; combo = 1; acertosSeguidos = 0;
+    jogando = true;
+    atualizarPlacar();
+    tempoEl.innerText = tempo;
+    msgEl.innerText = "Clique rápido no alvo! Dourado vale mais.";
+    SOM.clique();
+    moverAlvo();
+
+    intervalo = setInterval(function() {
+        tempo--;
+        tempoEl.innerText = tempo;
+        if (tempo > 0 && tempo <= 5) SOM.tom(880, 0.06, 'square', 0.04);
+        if (tempo <= 0) {
+            clearInterval(intervalo);
+            clearTimeout(fugaTimer);
+            jogando = false;
+            alvo.classList.remove("ouro");
+            let txt = "🏆 Fim de jogo! Pontuação final: " + pontos + " (nível " + nivel + ")";
+            if (pontos > recorde) {
+                recorde = pontos;
+                try { localStorage.setItem('clique-recorde', recorde); } catch (e) {}
+                document.getElementById("recorde").innerText = recorde;
+                txt += " — NOVO RECORDE!";
+                SOM.vitoria();
+            } else SOM.derrota();
+            msgEl.innerText = txt;
+        }
+    }, 1000);
+}
+</script>
+
+
+</body>
+</html>

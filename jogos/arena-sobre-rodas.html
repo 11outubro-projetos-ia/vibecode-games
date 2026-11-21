@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arena Sobre Rodas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #18181b;
+            font-family: 'Inter', sans-serif;
+        }
+        .font-hud {
+            font-family: 'Chakra Petch', sans-serif;
+        }
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* Estilo retrô anos 70/90 */
+        .retro-border {
+            border: 2px solid #f59e0b;
+            box-shadow: 0 0 18px rgba(245, 158, 11, 0.25), inset 0 0 10px rgba(245, 158, 11, 0.1);
+        }
+        .retro-stripe {
+            background: repeating-linear-gradient(
+                -45deg,
+                #f59e0b,
+                #f59e0b 10px,
+                #b45309 10px,
+                #b45309 20px
+            );
+        }
+        #damage-flash {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle, transparent 55%, rgba(239, 68, 68, 0.6) 100%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.12s;
+            z-index: 15;
+        }
+        /* Controles Touch */
+        .touch-pad {
+            background: rgba(24, 24, 27, 0.65);
+            border: 2px solid rgba(251, 191, 36, 0.45);
+            backdrop-filter: blur(4px);
+            color: #fef3c7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Chakra Petch', sans-serif;
+            font-weight: 700;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .touch-pad:active, .touch-pad.active {
+            background: rgba(245, 158, 11, 0.75);
+            color: #09090b;
+            transform: scale(0.94);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas 3D -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Flash de Dano -->
+    <div id="damage-flash"></div>
+
+    <!-- HUD In-Game -->
+    <div id="hud" class="hidden fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5">
+        
+        <!-- Topo: Radar Minimapa, Placar de Sobreviventes e Killfeed -->
+        <div class="flex justify-between items-start w-full">
+            <!-- Esquerda: Minimapa Radar + Botão Menu -->
+            <div class="flex flex-col gap-2">
+                <div class="relative w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-zinc-950/85 border-2 border-amber-500/80 shadow-xl overflow-hidden">
+                    <canvas id="radar-canvas" width="144" height="144" class="w-full h-full"></canvas>
+                </div>
+                <button id="btn-menu-ingame" class="pointer-events-auto bg-zinc-900/90 hover:bg-zinc-800 text-amber-400 border border-amber-500/50 px-3 py-1 rounded-lg text-xs font-hud font-bold uppercase tracking-wider shadow">
+                    ☰ Garagem / Menu
+                </button>
+            </div>
+
+            <!-- Centro: Sobreviventes & Alerta de Trava de Mira -->
+            <div class="flex flex-col items-center gap-2">
+                <div class="bg-zinc-950/85 border-2 border-amber-500/70 rounded-xl px-4 py-1.5 sm:px-6 sm:py-2 flex items-center gap-4 shadow-xl font-hud">
+                    <div class="text-center">
+                        <div class="text-[10px] text-amber-400 uppercase tracking-widest">Arena</div>
+                        <div id="hud-arena-name" class="text-xs sm:text-sm font-bold text-white uppercase">CÂNION DO SOL</div>
+                    </div>
+                    <div class="h-7 w-[1px] bg-zinc-700"></div>
+                    <div class="text-center">
+                        <div class="text-[10px] text-zinc-400 uppercase tracking-widest">Carros Vivos</div>
+                        <div class="text-lg sm:text-2xl font-extrabold text-amber-400">
+                            <span id="hud-alive">10</span><span class="text-zinc-500 text-sm">/10</span>
+                        </div>
+                    </div>
+                    <div class="h-7 w-[1px] bg-zinc-700"></div>
+                    <div class="text-center">
+                        <div class="text-[10px] text-zinc-400 uppercase tracking-widest">Abates</div>
+                        <div id="hud-kills" class="text-lg sm:text-2xl font-extrabold text-emerald-400">0</div>
+                    </div>
+                </div>
+
+                <!-- Banner de Notificação / Pickups -->
+                <div id="pickup-toast" class="opacity-0 transition-opacity duration-200 bg-amber-500 text-zinc-950 font-hud font-extrabold text-xs sm:text-sm px-4 py-1 rounded-full uppercase tracking-wider shadow-lg">
+                    +4 MÍSSEIS TELEGUIADOS!
+                </div>
+            </div>
+
+            <!-- Direita: Killfeed -->
+            <div id="killfeed" class="flex flex-col items-end gap-1 w-40 sm:w-60 text-[11px] sm:text-xs font-semibold"></div>
+        </div>
+
+        <!-- Rodapé: Integridade (HP), Turbo, Arma Especial e Velocímetro -->
+        <div class="flex justify-between items-end w-full">
+            <!-- Esquerda: HP e Turbo -->
+            <div class="bg-zinc-950/85 border border-zinc-700/90 rounded-xl p-3 sm:p-4 w-48 sm:w-64 shadow-xl font-hud">
+                <div class="flex justify-between items-center text-xs mb-1">
+                    <span class="text-zinc-300 font-bold tracking-wider">BLINDAGEM</span>
+                    <span id="hud-hp-text" class="text-emerald-400 font-extrabold text-sm">100%</span>
+                </div>
+                <div class="w-full h-3 bg-zinc-800 rounded-full overflow-hidden mb-3 border border-zinc-700">
+                    <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400 transition-all duration-150" style="width: 100%"></div>
+                </div>
+
+                <div class="flex justify-between items-center text-xs mb-1">
+                    <span class="text-sky-300 font-bold tracking-wider">NITRO / TURBO</span>
+                    <span id="hud-turbo-text" class="text-sky-400 font-extrabold text-xs">100%</span>
+                </div>
+                <div class="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                    <div id="hud-turbo-bar" class="h-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-75" style="width: 100%"></div>
+                </div>
+            </div>
+
+            <!-- Direita: Arsenal & Velocímetro -->
+            <div class="flex items-end gap-3">
+                <!-- Arma Especial -->
+                <div class="bg-zinc-950/85 border-2 border-amber-500/70 rounded-xl p-3 sm:p-4 text-right shadow-xl font-hud">
+                    <div class="text-[10px] text-zinc-400 uppercase tracking-widest">Arma Especial</div>
+                    <div id="hud-special-name" class="text-sm sm:text-base font-extrabold text-amber-400 uppercase">MÍSSIL TELEGUIADO</div>
+                    <div class="flex items-baseline justify-end gap-2 mt-0.5">
+                        <span class="text-xs text-zinc-400">MUNIÇÃO:</span>
+                        <span id="hud-special-ammo" class="text-2xl sm:text-3xl font-extrabold text-white">3</span>
+                    </div>
+                </div>
+
+                <!-- Velocímetro Retrô -->
+                <div class="hidden sm:flex flex-col items-center justify-center bg-zinc-950/90 border-2 border-zinc-700 rounded-2xl w-24 h-24 shadow-xl font-hud">
+                    <span id="hud-speed" class="text-3xl font-extrabold text-amber-400 leading-none">0</span>
+                    <span class="text-[10px] text-zinc-400 tracking-widest mt-1">KM/H</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controles Touch Mobile -->
+    <div id="touch-controls" class="hidden fixed inset-0 pointer-events-none z-25">
+        <!-- Direção Esquerda / Direita (Canto Inferior Esquerdo) -->
+        <div class="pointer-events-auto fixed bottom-28 left-3 flex gap-2">
+            <button id="t-left" class="touch-pad w-16 h-16 text-2xl">◀</button>
+            <button id="t-right" class="touch-pad w-16 h-16 text-2xl">▶</button>
+        </div>
+
+        <!-- Botões de Armas e Turbo (Canto Inferior Direito) -->
+        <div class="pointer-events-auto fixed bottom-28 right-3 flex flex-col items-end gap-2">
+            <div class="flex gap-2">
+                <button id="t-drift" class="touch-pad px-3 h-12 text-xs border-sky-400/60 text-sky-300">DRIFT</button>
+                <button id="t-turbo" class="touch-pad px-3 h-12 text-xs border-cyan-400/60 text-cyan-300">NITRO</button>
+            </div>
+            <div class="flex gap-2">
+                <button id="t-special" class="touch-pad w-16 h-16 text-xs bg-amber-600/70 border-amber-300 text-white flex-col">
+                    <span>ESPECIAL</span>
+                    <span class="text-[10px] opacity-80">MÍSSIL/MINA</span>
+                </button>
+                <button id="t-fire" class="touch-pad w-20 h-16 text-sm bg-red-600/75 border-red-400 text-white">
+                    ATIRAR
+                </button>
+            </div>
+            <!-- Pedais Acelerar / Ré -->
+            <div class="flex gap-2 mt-1">
+                <button id="t-brake" class="touch-pad w-16 h-12 text-xs border-red-400/50 text-red-200">RÉ</button>
+                <button id="t-gas" class="touch-pad w-20 h-12 text-xs border-emerald-400/60 text-emerald-300">ACELERAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tela Inicial Estilo Anos 70/90 (Garagem & Seleção de Arena) -->
+    <div id="main-menu" class="fixed inset-0 z-40 bg-zinc-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="max-w-4xl w-full bg-zinc-900 retro-border rounded-2xl overflow-hidden shadow-2xl text-white">
+            <!-- Faixa Decorativa Anos 70 -->
+            <div class="h-3 w-full retro-stripe"></div>
+
+            <div class="p-5 sm:p-8">
+                <div class="text-center mb-6">
+                    <div class="inline-block bg-amber-500/20 border border-amber-500 text-amber-400 font-hud text-xs font-bold px-3 py-0.5 rounded-full uppercase tracking-widest mb-2">
+                        Combate Veicular 3D • Todos Contra Todos (10 Carros)
+                    </div>
+                    <h1 class="text-4xl sm:text-6xl font-hud font-extrabold italic tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-amber-300 via-amber-500 to-red-600 drop-shadow">
+                        ARENA SOBRE RODAS
+                    </h1>
+                    <p class="text-zinc-400 text-xs sm:text-sm mt-1">Escolha sua máquina de guerra blindada, domine a arena e destrua os 9 rivais.</p>
+                </div>
+
+                <!-- Passo 1: Escolha do Veículo -->
+                <div class="mb-6">
+                    <label class="block font-hud text-xs font-bold uppercase tracking-widest text-amber-400 mb-2.5">1. Escolha seu Veículo</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3" id="vehicle-selector">
+                        <!-- Muscle Car -->
+                        <button type="button" data-vehicle="muscle" class="veh-card text-left p-4 rounded-xl border-2 border-amber-500 bg-amber-500/15 transition">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-hud text-lg font-extrabold text-amber-400">RELÂMPAGO</span>
+                                <span class="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold">Muscle Car</span>
+                            </div>
+                            <p class="text-xs text-zinc-300 mb-2">Velocidade máxima e drift ágil. Metralhadoras duplas no capô.</p>
+                            <div class="text-[11px] text-zinc-400 space-y-0.5 font-hud">
+                                <div>VELOCIDADE: ★★★★★</div>
+                                <div>BLINDAGEM: ★★★☆☆</div>
+                            </div>
+                        </button>
+
+                        <!-- Caminhonete Off-Road -->
+                        <button type="button" data-vehicle="pickup" class="veh-card text-left p-4 rounded-xl border-2 border-zinc-700 bg-zinc-800/70 hover:border-zinc-500 transition">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-hud text-lg font-extrabold text-emerald-400">TATU 4x4</span>
+                                <span class="text-[11px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold">Off-Road</span>
+                            </div>
+                            <p class="text-xs text-zinc-300 mb-2">Equilibrada em saltos e impactos. Inicia com extra de mísseis teleguiados.</p>
+                            <div class="text-[11px] text-zinc-400 space-y-0.5 font-hud">
+                                <div>VELOCIDADE: ★★★★☆</div>
+                                <div>BLINDAGEM: ★★★★☆</div>
+                            </div>
+                        </button>
+
+                        <!-- Van Blindada -->
+                        <button type="button" data-vehicle="van" class="veh-card text-left p-4 rounded-xl border-2 border-zinc-700 bg-zinc-800/70 hover:border-zinc-500 transition">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-hud text-lg font-extrabold text-sky-400">RINOCERONTE</span>
+                                <span class="text-[11px] bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded font-bold">Blindado</span>
+                            </div>
+                            <p class="text-xs text-zinc-300 mb-2">Tanque pesado que esmaga inimigos nas batidas e lança morteiros/minas.</p>
+                            <div class="text-[11px] text-zinc-400 space-y-0.5 font-hud">
+                                <div>VELOCIDADE: ★★★☆☆</div>
+                                <div>BLINDAGEM: ★★★★★</div>
+                            </div>
+                        </button>
+
+                        <button type="button" data-vehicle="buggy" class="veh-card text-left p-4 rounded-xl border-2 border-zinc-700 bg-zinc-800/70 hover:border-zinc-500 transition">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-hud text-lg font-extrabold text-lime-400">GRILO</span>
+                                <span class="text-[11px] bg-lime-500/20 text-lime-300 px-2 py-0.5 rounded font-bold">Buggy</span>
+                            </div>
+                            <p class="text-xs text-zinc-300 mb-2">O mais rápido e leve da arena. Pula longe nas rampas, mas aguenta pouco.</p>
+                            <div class="text-[11px] text-zinc-400 space-y-0.5 font-hud">
+                                <div>VELOCIDADE: ★★★★★+</div>
+                                <div>BLINDAGEM: ★★☆☆☆</div>
+                            </div>
+                        </button>
+                        <button type="button" data-vehicle="truck" class="veh-card text-left p-4 rounded-xl border-2 border-zinc-700 bg-zinc-800/70 hover:border-zinc-500 transition">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-hud text-lg font-extrabold text-stone-400">MAMUTE</span>
+                                <span class="text-[11px] bg-stone-500/20 text-stone-300 px-2 py-0.5 rounded font-bold">Caminhão</span>
+                            </div>
+                            <p class="text-xs text-zinc-300 mb-2">Lento e enorme: lâmina frontal que amassa rivais e 7 minas na caçamba.</p>
+                            <div class="text-[11px] text-zinc-400 space-y-0.5 font-hud">
+                                <div>VELOCIDADE: ★★☆☆☆</div>
+                                <div>BLINDAGEM: ★★★★★+</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Passo 2: Escolha da Arena -->
+                <div class="mb-6">
+                    <label class="block font-hud text-xs font-bold uppercase tracking-widest text-amber-400 mb-2.5">2. Escolha a Arena de Combate</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" id="arena-selector">
+                        <!-- Cânion do Sol -->
+                        <button type="button" data-arena="canion" class="arena-card text-left p-3.5 rounded-xl border-2 border-amber-500 bg-amber-500/15 transition">
+                            <div class="font-hud text-base font-bold text-amber-300">🌵 CÂNION DO SOL</div>
+                            <p class="text-xs text-zinc-300 mt-1">Cânions, rampas de salto, cactos e posto de gasolina com barris explosivos.</p>
+                        </button>
+
+                        <!-- Porto Industrial -->
+                        <button type="button" data-arena="port" class="arena-card text-left p-3.5 rounded-xl border-2 border-zinc-700 bg-zinc-800/70 hover:border-zinc-500 transition">
+                            <div class="font-hud text-base font-bold text-sky-300">🚢 PORTO INDUSTRIAL</div>
+                            <p class="text-xs text-zinc-300 mt-1">Contêineres metálicos, guindastes, rampas de carga e corredores amplos.</p>
+                        </button>
+
+                        <!-- Vulcão / Cratera -->
+                        <button type="button" data-arena="volcano" class="arena-card text-left p-3.5 rounded-xl border-2 border-zinc-700 bg-zinc-800/70 hover:border-zinc-500 transition">
+                            <div class="font-hud text-base font-bold text-red-400">🌋 CRATERA DO VULCÃO</div>
+                            <p class="text-xs text-zinc-300 mt-1">Rampa central gigante e poças de lava fervente que causam dano contínuo.</p>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Controles -->
+                <div class="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3 mb-6 text-xs text-zinc-300 flex flex-wrap justify-between gap-2">
+                    <span><b class="text-amber-400">Teclado:</b> WASD/Setas Dirigir • Espaço Drift • Shift Nitro • Clique/Z Metralhadora • E/X Especial</span>
+                    <span><b class="text-amber-400">Mobile:</b> Pedais e botões touch na tela</span>
+                </div>
+
+                <button id="btn-start" class="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 hover:from-amber-400 hover:to-red-500 text-zinc-950 font-hud font-extrabold text-2xl tracking-wider uppercase shadow-lg shadow-orange-600/30 transition transform active:scale-98">
+                    LIGAR MOTORES E ENTRAR NA ARENA!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Fim de Partida -->
+    <div id="gameover-modal" class="hidden fixed inset-0 z-30 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-zinc-900 retro-border rounded-2xl p-6 sm:p-8 max-w-md w-full text-center text-white shadow-2xl">
+            <h2 id="end-title" class="font-hud text-4xl font-extrabold italic text-amber-400 mb-2">SOBREVIVENTE!</h2>
+            <p id="end-subtitle" class="text-zinc-300 text-sm mb-6">Você destruiu todos os rivais na arena.</p>
+            <div class="bg-zinc-950/80 border border-zinc-800 rounded-xl p-4 mb-6 flex justify-around font-hud">
+                <div>
+                    <div class="text-xs text-zinc-400">CARROS DESTRUÍDOS</div>
+                    <div id="end-kills" class="text-2xl font-bold text-emerald-400">5</div>
+                </div>
+                <div>
+                    <div class="text-xs text-zinc-400">POSIÇÃO FINAL</div>
+                    <div id="end-rank" class="text-2xl font-bold text-amber-400">#1</div>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="btn-replay" class="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-hud font-extrabold text-xl uppercase transition">
+                    Jogar Novamente
+                </button>
+                <button id="btn-change-setup" class="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white font-hud font-extrabold text-xl uppercase transition">
+                    Garagem
+                </button>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * ARENA SOBRE RODAS - LOW POLY 3D
+ * Engine 3D Single-File com Three.js + Web Audio API + Física Arcade de Veículos + IA Deathmatch
+ */
+
+// ==========================================
+// 1. SISTEMA DE ÁUDIO SINTETIZADO (WEB AUDIO)
+// ==========================================
+class VehicleAudio {
+    constructor() {
+        this.ctx = null;
+        this.engineOsc = null;
+        this.engineGain = null;
+        this.isRunning = false;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+        if (!this.isRunning) {
+            this.startEngineHum();
+        }
+    }
+
+    startEngineHum() {
+        if (!this.ctx) return;
+        this.engineOsc = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        this.engineGain = this.ctx.createGain();
+
+        this.engineOsc.type = 'sawtooth';
+        this.engineOsc.frequency.value = 48;
+
+        filter.type = 'lowpass';
+        filter.frequency.value = 180;
+
+        this.engineGain.gain.value = 0.04;
+
+        this.engineOsc.connect(filter);
+        filter.connect(this.engineGain);
+        this.engineGain.connect(this.ctx.destination);
+        this.engineOsc.start();
+        this.isRunning = true;
+    }
+
+    updateEngine(speedRatio, isTurbo) {
+        if (!this.ctx || !this.engineOsc) return;
+        const baseFreq = 45 + Math.abs(speedRatio) * 85 + (isTurbo ? 35 : 0);
+        this.engineOsc.frequency.setTargetAtTime(baseFreq, this.ctx.currentTime, 0.08);
+        const targetVol = GAME.state === 'PLAYING' ? (0.04 + Math.abs(speedRatio) * 0.04) : 0.0;
+        this.engineGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.1);
+    }
+
+    playMachineGun(dist = 0) {
+        if (!this.ctx) return;
+        const vol = Math.max(0.02, 0.22 * Math.max(0, 1 - dist / 140));
+        if (vol <= 0.025) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(55, now + 0.07);
+
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+    }
+
+    playMissileLaunch(dist = 0) {
+        if (!this.ctx) return;
+        const vol = Math.max(0.03, 0.28 * Math.max(0, 1 - dist / 150));
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.25);
+
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    }
+
+    playExplosion(dist = 0) {
+        if (!this.ctx) return;
+        const vol = Math.max(0.04, 0.45 * Math.max(0, 1 - dist / 180));
+        if (vol <= 0.045) return;
+
+        const now = this.ctx.currentTime;
+        const bufferSize = this.ctx.sampleRate * 0.45;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(600, now);
+        filter.frequency.exponentialRampToValueAtTime(70, now + 0.42);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+    }
+
+    playPickup() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [523.25, 659.25, 783.99].forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+            gain.gain.setValueAtTime(0.16, now + idx * 0.06);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.12);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + idx * 0.06);
+            osc.stop(now + idx * 0.06 + 0.13);
+        });
+    }
+}
+
+const audio = new VehicleAudio();
+
+// ==========================================
+// 2. CONFIGURAÇÕES DE VEÍCULOS E ESTADO
+// ==========================================
+const VEHICLE_SPECS = {
+    muscle: {
+        name: 'Relâmpago',
+        maxSpeed: 42,
+        accel: 34,
+        turnSpeed: 2.5,
+        maxHp: 110,
+        mass: 1.0,
+        color: 0xdc2626,
+        stripeColor: 0xfbbf24,
+        initialSpecial: 'missile',
+        initialAmmo: 3
+    },
+    pickup: {
+        name: 'Tatu 4x4',
+        maxSpeed: 37,
+        accel: 30,
+        turnSpeed: 2.3,
+        maxHp: 135,
+        mass: 1.25,
+        color: 0x16a34a,
+        stripeColor: 0xfef08a,
+        initialSpecial: 'missile',
+        initialAmmo: 5
+    },
+    buggy: {
+        name: 'Grilo',
+        maxSpeed: 46,
+        accel: 40,
+        turnSpeed: 2.8,
+        maxHp: 85,
+        mass: 0.8,
+        color: 0x84cc16,
+        stripeColor: 0x18181b,
+        initialSpecial: 'missile',
+        initialAmmo: 2
+    },
+    truck: {
+        name: 'Mamute',
+        maxSpeed: 29,
+        accel: 22,
+        turnSpeed: 1.8,
+        maxHp: 210,
+        mass: 2.0,
+        color: 0x78716c,
+        stripeColor: 0xfacc15,
+        initialSpecial: 'mine',
+        initialAmmo: 7
+    },
+    van: {
+        name: 'Rinoceronte',
+        maxSpeed: 32,
+        accel: 26,
+        turnSpeed: 2.0,
+        maxHp: 175,
+        mass: 1.65,
+        color: 0x2563eb,
+        stripeColor: 0xf97316,
+        initialSpecial: 'mine',
+        initialAmmo: 5
+    }
+};
+
+const GAME = {
+    state: 'MENU',
+    selectedVehicle: 'muscle',
+    selectedArena: 'canion',
+    arenaLimit: 170,
+    cars: [],
+    playerCar: null,
+    obstacles: [],    // { x, z, rx, rz, h, isRamp, rampDir, isBarrel, mesh, alive }
+    lavaZones: [],    // { x, z, r }
+    pickups: [],      // { x, z, type, mesh, active, respawnTimer }
+    projectiles: [],  // { pos, vel, type, owner, target, life, mesh }
+    mines: [],        // { pos, owner, life, mesh }
+    particles: [],    // { mesh, vel, life, maxLife, scaleRate }
+    shockwaves: [],   // { mesh, life, maxLife }
+    isMobile: ('ontouchstart' in window) || (navigator.maxTouchPoints > 0)
+};
+
+// ==========================================
+// 3. INICIALIZAÇÃO THREE.JS
+// ==========================================
+const canvas = document.getElementById('game-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.2, 520);
+
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3f3f46, 0.8);
+scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.0);
+dirLight.position.set(60, 90, 50);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
+const shadowBound = 180;
+dirLight.shadow.camera.left = -shadowBound;
+dirLight.shadow.camera.right = shadowBound;
+dirLight.shadow.camera.top = shadowBound;
+dirLight.shadow.camera.bottom = -shadowBound;
+scene.add(dirLight);
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ==========================================
+// 4. CONSTRUTOR DE MODELOS 3D LOW-POLY (CARROS)
+// ==========================================
+function buildCarMesh(type, customColor = null) {
+    const spec = VEHICLE_SPECS[type];
+    const bodyColor = customColor !== null ? customColor : spec.color;
+    const group = new THREE.Group();
+    const chassis = new THREE.Group(); // Grupo da carroceria que inclina na suspensão
+    group.add(chassis);
+
+    const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor, flatShading: true });
+    const darkMat = new THREE.MeshLambertMaterial({ color: 0x18181b, flatShading: true });
+    const glassMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8, flatShading: true });
+    const chromeMat = new THREE.MeshLambertMaterial({ color: 0xd4d4d8, flatShading: true });
+    const stripeMat = new THREE.MeshLambertMaterial({ color: spec.stripeColor, flatShading: true });
+
+    if (type === 'muscle') {
+        // Corpo baixo e largo
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.75, 4.6), bodyMat);
+        base.position.y = 0.7;
+        base.castShadow = true;
+        chassis.add(base);
+
+        // Faixa de corrida no capô
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.77, 4.62), stripeMat);
+        stripe.position.y = 0.7;
+        chassis.add(stripe);
+
+        // Cabine
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.65, 2.0), glassMat);
+        cabin.position.set(0, 1.35, -0.2);
+        cabin.castShadow = true;
+        chassis.add(cabin);
+
+        // Teto
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.15, 1.9), bodyMat);
+        roof.position.set(0, 1.7, -0.2);
+        chassis.add(roof);
+
+        // Supercharger (motor exposto no capô)
+        const blower = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.35, 0.8), chromeMat);
+        blower.position.set(0, 1.2, 1.2);
+        chassis.add(blower);
+
+        // Metralhadoras duplas nos para-lamas
+        [-0.85, 0.85].forEach(gx => {
+            const gun = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 1.1), darkMat);
+            gun.position.set(gx, 1.15, 1.5);
+            chassis.add(gun);
+        });
+
+    } else if (type === 'pickup') {
+        // Caminhonete alta off-road
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 4.8), bodyMat);
+        base.position.y = 0.95;
+        base.castShadow = true;
+        chassis.add(base);
+
+        // Cabine dianteira
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.8, 1.8), bodyMat);
+        cab.position.set(0, 1.75, 0.45);
+        cab.castShadow = true;
+        chassis.add(cab);
+
+        const windshield = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.55, 1.6), glassMat);
+        windshield.position.set(0, 1.75, 0.5);
+        chassis.add(windshield);
+
+        // Lança-mísseis giratório na caçamba
+        const launcherBase = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 1.2), darkMat);
+        launcherBase.position.set(0, 1.5, -1.2);
+        chassis.add(launcherBase);
+
+        const pod = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.65, 1.3), stripeMat);
+        pod.position.set(0, 1.95, -1.2);
+        chassis.add(pod);
+
+    } else if (type === 'buggy') {
+        // Buggy leve com santantônio (Grilo)
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.45, 4.0), bodyMat);
+        base.position.y = 0.75; base.castShadow = true; chassis.add(base);
+        const bico = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 1.0), bodyMat);
+        bico.position.set(0, 0.95, 1.7); bico.rotation.x = -0.25; chassis.add(bico);
+        const banco = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.7, 0.6), darkMat);
+        banco.position.set(0, 1.25, -0.4); chassis.add(banco);
+        // gaiola tubular
+        [-0.8, 0.8].forEach(x => {
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.3, 0.12), stripeMat); p1.position.set(x, 1.6, -0.9); chassis.add(p1);
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.2, 0.12), stripeMat); p2.position.set(x, 1.55, 0.35); p2.rotation.x = 0.45; chassis.add(p2);
+        });
+        const topo = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 0.12), stripeMat); topo.position.set(0, 2.25, -0.9); chassis.add(topo);
+        const motor = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 0.9), chromeMat); motor.position.set(0, 1.15, -1.6); chassis.add(motor);
+        const asa = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.08, 0.6), bodyMat); asa.position.set(0, 1.9, -2.0); chassis.add(asa);
+        const canhao = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 1.2), darkMat); canhao.position.set(0, 1.25, 1.9); chassis.add(canhao);
+    } else if (type === 'truck') {
+        // Caminhão-guincho pesado com lâmina (Mamute)
+        const chassi = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.9, 5.6), darkMat);
+        chassi.position.y = 1.0; chassis.add(chassi);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.6, 1.9), bodyMat);
+        cab.position.set(0, 2.2, 1.6); cab.castShadow = true; chassis.add(cab);
+        const vidro = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.6, 0.1), glassMat);
+        vidro.position.set(0, 2.55, 2.57); chassis.add(vidro);
+        const cacamba = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 3.2), bodyMat);
+        cacamba.position.set(0, 1.95, -1.1); cacamba.castShadow = true; chassis.add(cacamba);
+        const faixa = new THREE.Mesh(new THREE.BoxGeometry(2.66, 0.3, 3.22), stripeMat);
+        faixa.position.set(0, 2.1, -1.1); chassis.add(faixa);
+        const lamina = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.1, 0.35), stripeMat);
+        lamina.position.set(0, 0.95, 3.05); lamina.rotation.x = -0.2; chassis.add(lamina);
+        const chamine = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.2, 8), chromeMat);
+        chamine.position.set(1.1, 3.2, 0.7); chassis.add(chamine);
+        const giroflex = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.3), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+        giroflex.position.set(0, 3.1, 1.6); chassis.add(giroflex);
+    } else {
+        // Van blindada (Rinoceronte)
+        const hull = new THREE.Mesh(new THREE.BoxGeometry(2.65, 1.65, 5.1), bodyMat);
+        hull.position.y = 1.25;
+        hull.castShadow = true;
+        chassis.add(hull);
+
+        const armorBand = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.45, 5.15), stripeMat);
+        armorBand.position.y = 1.15;
+        chassis.add(armorBand);
+
+        // Para-brisa blindado
+        const visor = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.45, 0.2), glassMat);
+        visor.position.set(0, 1.65, 2.5);
+        chassis.add(visor);
+
+        // Quebra-mato frontal
+        const ram = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.85, 0.4), chromeMat);
+        ram.position.set(0, 0.85, 2.65);
+        chassis.add(ram);
+
+        // Torreta superior
+        const turret = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 1.4), darkMat);
+        turret.position.set(0, 2.25, -0.3);
+        chassis.add(turret);
+    }
+
+    // 4 Rodas
+    const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 10);
+    wheelGeo.rotateZ(Math.PI / 2);
+    const wheels = [];
+    const wheelOffsets = [
+        [-1.25, 0.55, 1.5],
+        [1.25, 0.55, 1.5],
+        [-1.25, 0.55, -1.5],
+        [1.25, 0.55, -1.5]
+    ];
+    wheelOffsets.forEach(([wx, wy, wz]) => {
+        const w = new THREE.Mesh(wheelGeo, darkMat);
+        w.position.set(wx, wy, wz);
+        w.castShadow = true;
+        group.add(w);
+        wheels.push(w);
+    });
+
+    // Chamas de Turbo no escapamento (visíveis ao usar nitro)
+    const flameGeo = new THREE.ConeGeometry(0.25, 1.1, 6);
+    flameGeo.rotateX(-Math.PI / 2);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+    const flameLeft = new THREE.Mesh(flameGeo, flameMat);
+    flameLeft.position.set(-0.6, 0.55, -2.7);
+    flameLeft.visible = false;
+    group.add(flameLeft);
+
+    const flameRight = flameLeft.clone();
+    flameRight.position.x = 0.6;
+    group.add(flameRight);
+
+    return { group, chassis, wheels, flames: [flameLeft, flameRight] };
+}
+
+// ==========================================
+// 5. CONSTRUTOR DAS 3 ARENAS DISTINTAS
+// ==========================================
+let arenaGroup = new THREE.Group();
+scene.add(arenaGroup);
+
+function clearArena() {
+    scene.remove(arenaGroup);
+    arenaGroup = new THREE.Group();
+    scene.add(arenaGroup);
+
+    GAME.obstacles = [];
+    GAME.lavaZones = [];
+    GAME.pickups.forEach(p => scene.remove(p.mesh));
+    GAME.pickups = [];
+    GAME.projectiles.forEach(p => scene.remove(p.mesh));
+    GAME.projectiles = [];
+    GAME.mines.forEach(m => scene.remove(m.mesh));
+    GAME.mines = [];
+    GAME.particles.forEach(p => scene.remove(p.mesh));
+    GAME.particles = [];
+    GAME.shockwaves.forEach(s => scene.remove(s.mesh));
+    GAME.shockwaves = [];
+}
+
+function addArenaBox(x, y, z, w, h, d, color, options = {}) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mat = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    arenaGroup.add(mesh);
+
+    if (options.solid !== false) {
+        GAME.obstacles.push({
+            x,
+            z,
+            rx: w / 2,
+            rz: d / 2,
+            h: y + h / 2,
+            isRamp: !!options.isRamp,
+            rampDir: options.rampDir || 'N',
+            isBarrel: !!options.isBarrel,
+            alive: true,
+            mesh
+        });
+    }
+    return mesh;
+}
+
+function addJumpRamp(x, z, w, d, height, dir, color) {
+    // Cria rampa inclinada visual + dados físicos para impulsionar carros no ar
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(d, 0);
+    shape.lineTo(d, height);
+    shape.closePath();
+
+    const extrudeSettings = { depth: w, bevelEnabled: false };
+    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    geo.translate(-d / 2, 0, -w / 2);
+
+    if (dir === 'N') geo.rotateY(Math.PI / 2);
+    else if (dir === 'S') geo.rotateY(-Math.PI / 2);
+    else if (dir === 'E') geo.rotateY(0);
+    else if (dir === 'W') geo.rotateY(Math.PI);
+
+    const mat = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, 0, z);
+    mesh.receiveShadow = true;
+    mesh.castShadow = true;
+    arenaGroup.add(mesh);
+
+    GAME.obstacles.push({
+        x,
+        z,
+        rx: (dir === 'N' || dir === 'S') ? w / 2 : d / 2,
+        rz: (dir === 'N' || dir === 'S') ? d / 2 : w / 2,
+        h: height,
+        isRamp: true,
+        rampDir: dir,
+        alive: true,
+        mesh
+    });
+}
+
+function buildArena(arenaId) {
+    clearArena();
+    const L = GAME.arenaLimit; // 170 -> arena de 340x340
+
+    if (arenaId === 'canion') {
+        document.getElementById('hud-arena-name').textContent = 'CÂNION DO SOL';
+        scene.background = new THREE.Color(0xfde68a);
+        scene.fog = new THREE.Fog(0xfde68a, 120, 380);
+
+        // Chão arenoso
+        addArenaBox(0, -0.5, 0, L * 2 + 20, 1, L * 2 + 20, 0xd97706, { solid: false });
+
+        // Paredes de Cânion ao redor
+        addArenaBox(0, 8, -L, L * 2 + 12, 16, 8, 0x9a3412);
+        addArenaBox(0, 8, L, L * 2 + 12, 16, 8, 0x9a3412);
+        addArenaBox(-L, 8, 0, 8, 16, L * 2 + 12, 0x9a3412);
+        addArenaBox(L, 8, 0, 8, 16, L * 2 + 12, 0x9a3412);
+
+        // Posto de Gasolina retrô no quadrante Norte
+        addArenaBox(0, 3, -55, 22, 6, 10, 0xfef3c7); // Loja
+        addArenaBox(0, 6.3, -44, 24, 0.8, 12, 0xdc2626, { solid: false }); // Marquise
+        addArenaBox(-8, 3, -44, 1.2, 6, 1.2, 0xe5e7eb);
+        addArenaBox(8, 3, -44, 1.2, 6, 1.2, 0xe5e7eb);
+
+        // Barris explosivos vermelhos perto do posto e pela arena
+        const barrelCoords = [
+            [-4, -42], [4, -42], [0, -40],
+            [-45, 20], [45, -20], [35, 55], [-55, -35]
+        ];
+        barrelCoords.forEach(([bx, bz]) => {
+            addArenaBox(bx, 1.1, bz, 1.8, 2.2, 1.8, 0xef4444, { isBarrel: true });
+        });
+
+        // Rochas / Formações de Cânion
+        addArenaBox(-48, 5, 0, 16, 10, 22, 0xb45309);
+        addArenaBox(48, 5, 10, 18, 10, 18, 0xb45309);
+
+        // Rampas de Salto
+        addJumpRamp(0, 15, 12, 16, 3.8, 'N', 0xf59e0b);
+        addJumpRamp(0, -15, 12, 16, 3.8, 'S', 0xf59e0b);
+
+        // Cactos Low-Poly decorativos
+        [[-70, -65], [75, -60], [-75, 65], [70, 70], [-25, 70], [28, -75]].forEach(([cx, cz]) => {
+            addArenaBox(cx, 2.2, cz, 1.1, 4.4, 1.1, 0x15803d);
+            addArenaBox(cx + 1.1, 2.6, cz, 1.2, 0.7, 0.7, 0x15803d, { solid: false });
+        });
+
+    } else if (arenaId === 'port') {
+        document.getElementById('hud-arena-name').textContent = 'PORTO INDUSTRIAL';
+        scene.background = new THREE.Color(0x93c5fd);
+        scene.fog = new THREE.Fog(0x93c5fd, 120, 390);
+
+        // Asfalto industrial
+        addArenaBox(0, -0.5, 0, L * 2 + 20, 1, L * 2 + 20, 0x3f3f46, { solid: false });
+
+        // Muros e cercas do porto
+        addArenaBox(0, 6, -L, L * 2 + 12, 12, 6, 0x52525b);
+        addArenaBox(0, 6, L, L * 2 + 12, 12, 6, 0x52525b);
+        addArenaBox(-L, 6, 0, 6, 12, L * 2 + 12, 0x52525b);
+        addArenaBox(L, 6, 0, 6, 12, L * 2 + 12, 0x52525b);
+
+        // Pilhas de Contêineres coloridos formando corredores
+        const containers = [
+            [-45, -35, 6, 4.5, 16, 0xdc2626],
+            [-45, 35, 6, 4.5, 16, 0x2563eb],
+            [45, -35, 6, 4.5, 16, 0xea580c],
+            [45, 35, 6, 4.5, 16, 0x059669],
+            [0, -65, 18, 4.5, 6, 0x0284c7],
+            [0, 65, 18, 4.5, 6, 0xd97706]
+        ];
+        containers.forEach(([x, z, w, h, d, col]) => {
+            addArenaBox(x, h / 2, z, w, h, d, col);
+        });
+
+        // Guindastes Portuários amarelos (pilares)
+        [[-75, 0], [75, 0]].forEach(([gx, gz]) => {
+            addArenaBox(gx, 12, gz - 8, 2.5, 24, 2.5, 0xfacc15);
+            addArenaBox(gx, 12, gz + 8, 2.5, 24, 2.5, 0xfacc15);
+            addArenaBox(gx, 24, gz, 4, 2, 26, 0xfacc15, { solid: false });
+        });
+
+        // Rampas metálicas no centro
+        addJumpRamp(-14, 0, 10, 15, 3.5, 'E', 0x94a3b8);
+        addJumpRamp(14, 0, 10, 15, 3.5, 'W', 0x94a3b8);
+
+        // Barris inflamáveis
+        [[-22, -22], [22, 22], [-22, 22], [22, -22]].forEach(([bx, bz]) => {
+            addArenaBox(bx, 1.1, bz, 1.8, 2.2, 1.8, 0xf97316, { isBarrel: true });
+        });
+
+    } else if (arenaId === 'volcano') {
+        document.getElementById('hud-arena-name').textContent = 'CRATERA DO VULCÃO';
+        scene.background = new THREE.Color(0x450a0a);
+        scene.fog = new THREE.Fog(0x450a0a, 100, 340);
+
+        // Rocha vulcânica escura
+        addArenaBox(0, -0.5, 0, L * 2 + 20, 1, L * 2 + 20, 0x27272a, { solid: false });
+
+        // Bordas da cratera
+        addArenaBox(0, 9, -L, L * 2 + 12, 18, 10, 0x18181b);
+        addArenaBox(0, 9, L, L * 2 + 12, 18, 10, 0x18181b);
+        addArenaBox(-L, 9, 0, 10, 18, L * 2 + 12, 0x18181b);
+        addArenaBox(L, 9, 0, 10, 18, L * 2 + 12, 0x18181b);
+
+        // Poças de Lava incandescente (causam dano contínuo ao passar por cima!)
+        const lavaCoords = [
+            [-45, -45, 16],
+            [45, 45, 16],
+            [-48, 42, 14],
+            [48, -42, 14]
+        ];
+        lavaCoords.forEach(([lx, lz, r]) => {
+            const lavaGeo = new THREE.CylinderGeometry(r, r, 0.2, 16);
+            const lavaMat = new THREE.MeshBasicMaterial({ color: 0xf97316 });
+            const lavaMesh = new THREE.Mesh(lavaGeo, lavaMat);
+            lavaMesh.position.set(lx, 0.08, lz);
+            arenaGroup.add(lavaMesh);
+
+            GAME.lavaZones.push({ x: lx, z: lz, r: r * 0.9 });
+        });
+
+        // Rochas de obsidiana
+        addArenaBox(0, 4, -58, 14, 8, 10, 0x3f3f46);
+        addArenaBox(0, 4, 58, 14, 8, 10, 0x3f3f46);
+
+        // Rampa Central Gigante (Vulcânica)
+        addJumpRamp(0, 14, 15, 18, 4.8, 'N', 0xdc2626);
+        addJumpRamp(0, -14, 15, 18, 4.8, 'S', 0xdc2626);
+    }
+
+    extrasArena(arenaId, L);
+    spawnArenaPickups();
+}
+
+// Anel externo (a arena cresceu): mais cobertura, rampas e barris longe do centro
+function extrasArena(arenaId, L) {
+    const anel = [[-120, -120], [120, -120], [-120, 120], [120, 120], [0, -130], [0, 130], [-135, 0], [135, 0]];
+    if (arenaId === 'canion') {
+        // mesas de pedra (mesetas) e arcos de rocha
+        anel.slice(0, 4).forEach(([x, z], i) => {
+            addArenaBox(x, 6, z, 20, 12, 16, 0xc2410c);
+            addArenaBox(x + 2, 13, z - 1, 14, 2.5, 11, 0xea580c);
+        });
+        [[-95, 0], [95, 0]].forEach(([x, z]) => {
+            addArenaBox(x, 5, z - 9, 5, 10, 5, 0xb45309);
+            addArenaBox(x, 5, z + 9, 5, 10, 5, 0xb45309);
+            addArenaBox(x, 11, z, 6, 2.5, 23, 0xb45309, { solid: false });
+        });
+        addJumpRamp(-100, -60, 12, 16, 4.2, 'N', 0xf59e0b);
+        addJumpRamp(100, 60, 12, 16, 4.2, 'S', 0xf59e0b);
+        addJumpRamp(60, -100, 12, 16, 4.2, 'W', 0xf59e0b);
+        addJumpRamp(-60, 100, 12, 16, 4.2, 'E', 0xf59e0b);
+        [[-150, 60], [150, -60], [60, 150], [-60, -150], [-110, 30], [110, -30]].forEach(([bx, bz]) => addArenaBox(bx, 1.1, bz, 1.8, 2.2, 1.8, 0xef4444, { isBarrel: true }));
+        [[-140, -90], [140, 90], [-90, 145], [90, -145], [-150, 140], [150, -140], [30, 120], [-30, -120]].forEach(([cx, cz]) => {
+            addArenaBox(cx, 2.2, cz, 1.1, 4.4, 1.1, 0x15803d);
+            addArenaBox(cx + 1.1, 2.6, cz, 1.2, 0.7, 0.7, 0x15803d, { solid: false });
+            addArenaBox(cx - 1.1, 3.2, cz, 1.2, 0.7, 0.7, 0x15803d, { solid: false });
+        });
+    } else if (arenaId === 'port') {
+        const cores = [0xdc2626, 0x2563eb, 0xea580c, 0x059669, 0x7c3aed, 0x0891b2];
+        anel.forEach(([x, z], i) => {
+            const deitado = i % 2 === 0;
+            addArenaBox(x, 2.25, z, deitado ? 16 : 6, 4.5, deitado ? 6 : 16, cores[i % 6]);
+            if (i < 4) addArenaBox(x, 6.75, z, deitado ? 16 : 6, 4.5, deitado ? 6 : 16, cores[(i + 2) % 6]);
+        });
+        // armazéns compridos nas laterais
+        addArenaBox(-100, 7, -70, 30, 14, 18, 0x71717a);
+        addArenaBox(100, 7, 70, 30, 14, 18, 0x71717a);
+        addArenaBox(-100, 14.5, -70, 32, 1, 20, 0x3f3f46, { solid: false });
+        addArenaBox(100, 14.5, 70, 32, 1, 20, 0x3f3f46, { solid: false });
+        addJumpRamp(-70, 110, 10, 15, 3.8, 'E', 0x94a3b8);
+        addJumpRamp(70, -110, 10, 15, 3.8, 'W', 0x94a3b8);
+        addJumpRamp(110, 0, 10, 15, 3.8, 'N', 0x94a3b8);
+        addJumpRamp(-110, 0, 10, 15, 3.8, 'S', 0x94a3b8);
+        [[-140, 40], [140, -40], [40, 140], [-40, -140], [-60, 60], [60, -60]].forEach(([bx, bz]) => addArenaBox(bx, 1.1, bz, 1.8, 2.2, 1.8, 0xf97316, { isBarrel: true }));
+    } else if (arenaId === 'volcano') {
+        [[-110, 100, 14], [110, -100, 14], [0, 120, 12], [0, -120, 12]].forEach(([lx, lz, r]) => {
+            const lava = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.2, 16), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+            lava.position.set(lx, 0.08, lz);
+            arenaGroup.add(lava);
+            GAME.lavaZones.push({ x: lx, z: lz, r: r * 0.9 });
+        });
+        // colunas de basalto
+        [[-120, -40], [120, 40], [-40, 130], [40, -130], [-130, 130], [130, -130]].forEach(([x, z]) => {
+            addArenaBox(x, 6, z, 7, 12, 7, 0x3f3f46);
+            addArenaBox(x + 4, 4, z + 3, 5, 8, 5, 0x52525b);
+        });
+        addJumpRamp(-100, -100, 14, 18, 4.8, 'N', 0xdc2626);
+        addJumpRamp(100, 100, 14, 18, 4.8, 'S', 0xdc2626);
+        [[-80, 0], [80, 0], [0, -80], [0, 80]].forEach(([bx, bz]) => addArenaBox(bx, 1.1, bz, 1.8, 2.2, 1.8, 0xef4444, { isBarrel: true }));
+    }
+}
+
+// ==========================================
+// 6. POWER-UPS E CAIXAS DE ARMAS GIRATÓRIAS
+// ==========================================
+const PICKUP_TYPES = [
+    { id: 'missile', label: '+4 MÍSSEIS TELEGUIADOS', color: 0xef4444 },
+    { id: 'mine',    label: '+4 MINAS TERRESTRES',   color: 0xf59e0b },
+    { id: 'repair',  label: '+45% REPARO DE BLINDAGEM', color: 0x10b981 },
+    { id: 'turbo',   label: '+100% CARGA DE NITRO',   color: 0x06b6d4 }
+];
+
+// Modelos 3D dos itens (em vez de cubos coloridos)
+function buildPickupModel(type, color) {
+    const g = new THREE.Group();
+    const M = (c, em = 0) => new THREE.MeshLambertMaterial({ color: c, flatShading: true, emissive: em ? c : 0x000000, emissiveIntensity: em });
+    const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+    let blink = null;
+    if (type === 'missile') {
+        // foguete em pé com aletas
+        const corpo = M(0xf4f4f5), verm = M(0xdc2626, 0.3);
+        add(new THREE.CylinderGeometry(0.42, 0.42, 2.2, 10), corpo, 0, 0.2, 0);
+        add(new THREE.ConeGeometry(0.42, 0.9, 10), verm, 0, 1.75, 0);
+        add(new THREE.CylinderGeometry(0.44, 0.44, 0.25, 10), verm, 0, 0.75, 0);
+        for (let k = 0; k < 4; k++) {
+            const a = k * Math.PI / 2;
+            const fin = add(new THREE.BoxGeometry(0.08, 0.7, 0.55), verm, Math.cos(a) * 0.5, -0.6, Math.sin(a) * 0.5);
+            fin.rotation.y = -a;
+        }
+        add(new THREE.ConeGeometry(0.3, 0.6, 8), new THREE.MeshBasicMaterial({ color: 0xfb923c }), 0, -1.2, 0).rotation.x = Math.PI;
+    } else if (type === 'mine') {
+        // mina: disco escuro com pontas e luz que pisca
+        const metal = M(0x3f3f46), amar = M(0xf59e0b, 0.3);
+        add(new THREE.CylinderGeometry(1.0, 1.1, 0.45, 12), metal, 0, -0.3, 0);
+        add(new THREE.CylinderGeometry(1.12, 1.12, 0.12, 12), amar, 0, -0.3, 0);
+        add(new THREE.SphereGeometry(0.62, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), metal, 0, -0.08, 0);
+        for (let k = 0; k < 6; k++) {
+            const a = k * Math.PI / 3;
+            const pt = add(new THREE.ConeGeometry(0.12, 0.45, 6), M(0xa1a1aa), Math.cos(a) * 0.55, 0.15, Math.sin(a) * 0.55);
+            pt.rotation.z = -Math.cos(a) * 0.7; pt.rotation.x = Math.sin(a) * 0.7;
+        }
+        blink = add(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff0000 }), 0, 0.6, 0);
+    } else if (type === 'repair') {
+        // maleta de ferramentas com cruz + chave inglesa
+        const verde = M(0x10b981, 0.2), branco = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        add(new THREE.BoxGeometry(1.9, 1.1, 1.0), verde, 0, 0, 0);
+        add(new THREE.BoxGeometry(1.95, 0.12, 1.05), M(0x065f46), 0, 0.35, 0);
+        add(new THREE.BoxGeometry(0.8, 0.12, 0.14), M(0x18181b), 0, 0.82, 0);
+        add(new THREE.BoxGeometry(0.12, 0.3, 0.14), M(0x18181b), -0.34, 0.66, 0);
+        add(new THREE.BoxGeometry(0.12, 0.3, 0.14), M(0x18181b), 0.34, 0.66, 0);
+        [0.51, -0.51].forEach(z => { add(new THREE.BoxGeometry(0.6, 0.18, 0.04), branco, 0, -0.05, z); add(new THREE.BoxGeometry(0.18, 0.6, 0.04), branco, 0, -0.05, z); });
+        const chave = new THREE.Group();
+        const aco = M(0xd4d4d8);
+        const cabo = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.4, 0.1), aco); chave.add(cabo);
+        const boca = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.08, 6, 10, Math.PI * 1.5), aco); boca.position.y = 0.8; boca.rotation.z = Math.PI * 0.75; chave.add(boca);
+        chave.position.set(1.25, 0.2, 0); chave.rotation.z = -0.35; g.add(chave);
+    } else {
+        // cilindro de nitro com válvula e raio
+        const azul = M(0x06b6d4, 0.3), branco = M(0xf8fafc);
+        add(new THREE.CylinderGeometry(0.55, 0.55, 1.7, 12), azul, 0, 0, 0);
+        add(new THREE.SphereGeometry(0.55, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), azul, 0, 0.85, 0);
+        add(new THREE.SphereGeometry(0.55, 12, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), azul, 0, -0.85, 0);
+        add(new THREE.CylinderGeometry(0.57, 0.57, 0.45, 12), branco, 0, 0.1, 0);
+        add(new THREE.CylinderGeometry(0.12, 0.12, 0.4, 8), M(0x71717a), 0, 1.5, 0);
+        add(new THREE.BoxGeometry(0.5, 0.12, 0.12), M(0xdc2626), 0, 1.72, 0);
+        const amarelo = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+        [0.58, -0.58].forEach(z => {
+            const a = add(new THREE.BoxGeometry(0.14, 0.42, 0.04), amarelo, 0.06, 0.22, z); a.rotation.z = 0.5;
+            const b = add(new THREE.BoxGeometry(0.14, 0.42, 0.04), amarelo, -0.06, -0.08, z); b.rotation.z = 0.5;
+        });
+    }
+    return { g, blink };
+}
+
+function spawnArenaPickups() {
+    const spots = [
+        [0, 0],
+        [-30, 0], [30, 0],
+        [0, -35], [0, 35],
+        [-65, -20], [65, 20],
+        [-65, 25], [65, -25],
+        [-25, -75], [25, 75],
+        [80, 0], [-80, 0],
+        // anel externo da arena maior
+        [-110, -80], [110, 80], [-80, 110], [80, -110],
+        [-145, 0], [145, 0], [0, -150], [0, 150],
+        [-130, 130], [130, -130], [-140, -140], [140, 140]
+    ];
+
+    spots.forEach(([px, pz], idx) => {
+        const pInfo = PICKUP_TYPES[idx % PICKUP_TYPES.length];
+        const holder = new THREE.Group();
+        const { g, blink } = buildPickupModel(pInfo.id, pInfo.color);
+        holder.add(g);
+        // anel brilhante no chão marcando o item
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.12, 6, 24), new THREE.MeshBasicMaterial({ color: pInfo.color }));
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = -1.35;
+        holder.add(ring);
+        holder.position.set(px, 1.5, pz);
+        scene.add(holder);
+
+        GAME.pickups.push({
+            x: px,
+            z: pz,
+            type: pInfo.id,
+            label: pInfo.label,
+            mesh: holder,
+            model: g,
+            ring,
+            blink,
+            active: true,
+            respawnTimer: 0
+        });
+    });
+}
+
+// ==========================================
+// 7. CRIAÇÃO DOS VEÍCULOS (JOGADOR + 9 BOTS)
+// ==========================================
+const BOT_DRIVERS = [
+    { name: 'Brasa', type: 'muscle', color: 0xeab308 },
+    { name: 'Faísca', type: 'pickup', color: 0x9333ea },
+    { name: 'Trovão', type: 'van', color: 0x0d9488 },
+    { name: 'Pimenta', type: 'muscle', color: 0xec4899 },
+    { name: 'Ventania', type: 'pickup', color: 0xf97316 },
+    { name: 'Cacau', type: 'truck', color: 0x92400e },
+    { name: 'Pipoca', type: 'buggy', color: 0xfde047 },
+    { name: 'Jabuti', type: 'van', color: 0x4d7c0f },
+    { name: 'Maré', type: 'buggy', color: 0x0ea5e9 }
+];
+
+function spawnVehicles() {
+    GAME.cars.forEach(c => scene.remove(c.mesh));
+    GAME.cars = [];
+
+    // 10 vagas num círculo grande; o jogador começa no Sul olhando para o centro
+    const spawnPoints = [];
+    for (let k = 0; k < 10; k++) {
+        const a = Math.PI / 2 + k * Math.PI * 2 / 10;
+        const x = Math.cos(a) * 125, z = Math.sin(a) * 125;
+        spawnPoints.push({ x, z, yaw: Math.atan2(-x, -z) });
+    }
+
+    // Cria carro do Jogador
+    const pSpec = VEHICLE_SPECS[GAME.selectedVehicle];
+    const pModel = buildCarMesh(GAME.selectedVehicle);
+    pModel.group.position.set(spawnPoints[0].x, 0, spawnPoints[0].z);
+    scene.add(pModel.group);
+
+    GAME.playerCar = {
+        id: 'player',
+        name: 'Você',
+        isPlayer: true,
+        type: GAME.selectedVehicle,
+        spec: pSpec,
+        pos: new THREE.Vector3(spawnPoints[0].x, 0, spawnPoints[0].z),
+        vel: new THREE.Vector3(0, 0, 0),
+        velY: 0,
+        yaw: spawnPoints[0].yaw,
+        speed: 0,
+        hp: pSpec.maxHp,
+        maxHp: pSpec.maxHp,
+        turbo: 100,
+        alive: true,
+        kills: 0,
+        grounded: true,
+        specialType: pSpec.initialSpecial,
+        specialAmmo: pSpec.initialAmmo,
+        mgCooldown: 0,
+        specialCooldown: 0,
+        mesh: pModel.group,
+        chassis: pModel.chassis,
+        wheels: pModel.wheels,
+        flames: pModel.flames,
+        smokeTimer: 0
+    };
+    GAME.cars.push(GAME.playerCar);
+
+    // Cria 9 Bots Inimigos (Deathmatch Todos Contra Todos)
+    BOT_DRIVERS.forEach((bInfo, idx) => {
+        const sp = spawnPoints[idx + 1];
+        const bSpec = VEHICLE_SPECS[bInfo.type];
+        const bModel = buildCarMesh(bInfo.type, bInfo.color);
+        bModel.group.position.set(sp.x, 0, sp.z);
+        scene.add(bModel.group);
+
+        const botCar = {
+            id: `bot_${idx}`,
+            name: bInfo.name,
+            isPlayer: false,
+            type: bInfo.type,
+            spec: bSpec,
+            pos: new THREE.Vector3(sp.x, 0, sp.z),
+            vel: new THREE.Vector3(0, 0, 0),
+            velY: 0,
+            yaw: sp.yaw,
+            speed: 0,
+            hp: bSpec.maxHp,
+            maxHp: bSpec.maxHp,
+            turbo: 100,
+            alive: true,
+            kills: 0,
+            grounded: true,
+            specialType: bSpec.initialSpecial,
+            specialAmmo: 3,
+            mgCooldown: 0.3 + Math.random() * 0.4,
+            specialCooldown: 2 + Math.random() * 2,
+            mesh: bModel.group,
+            chassis: bModel.chassis,
+            wheels: bModel.wheels,
+            flames: bModel.flames,
+            smokeTimer: 0,
+            aiTarget: null,
+            aiThinkTimer: 0,
+            aiTurnBias: Math.random() < 0.5 ? 1 : -1
+        };
+        GAME.cars.push(botCar);
+    });
+}
+
+// ==========================================
+// 8. CONTROLES (TECLADO + TOUCH MOBILE)
+// ==========================================
+const input = {
+    forward: 0,
+    turn: 0,
+    drift: false,
+    turbo: false,
+    fireMG: false,
+    fireSpecial: false
+};
+
+const keys = {};
+
+window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+    if (GAME.state !== 'PLAYING') return;
+    if (e.code === 'KeyE' || e.code === 'KeyX') {
+        fireSpecialWeapon(GAME.playerCar);
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0 && GAME.state === 'PLAYING') {
+        keys['MouseLeft'] = true;
+    }
+});
+window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) keys['MouseLeft'] = false;
+});
+
+function readPlayerInputs() {
+    if (!GAME.isMobile) {
+        let fwd = 0;
+        if (keys['KeyW'] || keys['ArrowUp']) fwd += 1;
+        if (keys['KeyS'] || keys['ArrowDown']) fwd -= 1;
+
+        let trn = 0;
+        if (keys['KeyA'] || keys['ArrowLeft']) trn += 1;
+        if (keys['KeyD'] || keys['ArrowRight']) trn -= 1;
+
+        input.forward = fwd;
+        input.turn = trn;
+        input.drift = !!keys['Space'];
+        input.turbo = !!(keys['ShiftLeft'] || keys['ShiftRight']);
+        input.fireMG = !!(keys['KeyZ'] || keys['Enter'] || keys['MouseLeft']);
+    }
+}
+
+// Configuração dos Botões Touch
+function bindTouchButton(id, onDown, onUp) {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        el.classList.add('active');
+        onDown();
+    }, { passive: false });
+    el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        el.classList.remove('active');
+        if (onUp) onUp();
+    }, { passive: false });
+}
+
+bindTouchButton('t-left', () => { input.turn = 1; }, () => { if (input.turn === 1) input.turn = 0; });
+bindTouchButton('t-right', () => { input.turn = -1; }, () => { if (input.turn === -1) input.turn = 0; });
+bindTouchButton('t-gas', () => { input.forward = 1; }, () => { if (input.forward === 1) input.forward = 0; });
+bindTouchButton('t-brake', () => { input.forward = -1; }, () => { if (input.forward === -1) input.forward = 0; });
+bindTouchButton('t-drift', () => { input.drift = true; }, () => { input.drift = false; });
+bindTouchButton('t-turbo', () => { input.turbo = true; }, () => { input.turbo = false; });
+bindTouchButton('t-fire', () => { input.fireMG = true; }, () => { input.fireMG = false; });
+bindTouchButton('t-special', () => {
+    if (GAME.state === 'PLAYING' && GAME.playerCar) fireSpecialWeapon(GAME.playerCar);
+});
+
+// ==========================================
+// 9. FÍSICA ARCADE DE VEÍCULOS, DRIFT E RAMPAS
+// ==========================================
+function updateCarPhysics(car, ctrl, dt) {
+    if (!car.alive) return;
+
+    car.mgCooldown = Math.max(0, car.mgCooldown - dt);
+    car.specialCooldown = Math.max(0, car.specialCooldown - dt);
+
+    // Gerenciamento de Turbo / Nitro
+    const usingTurbo = ctrl.turbo && car.turbo > 2 && ctrl.forward > 0;
+    if (usingTurbo) {
+        car.turbo = Math.max(0, car.turbo - 32 * dt);
+        car.flames.forEach(f => {
+            f.visible = true;
+            f.scale.z = 0.8 + Math.random() * 0.6;
+        });
+    } else {
+        car.turbo = Math.min(100, car.turbo + 6 * dt);
+        car.flames.forEach(f => f.visible = false);
+    }
+
+    const forwardVec = new THREE.Vector3(Math.sin(car.yaw), 0, Math.cos(car.yaw));
+    const rightVec = new THREE.Vector3(Math.cos(car.yaw), 0, -Math.sin(car.yaw));
+
+    // Aceleração e Velocidade Máxima
+    const maxSpd = car.spec.maxSpeed * (usingTurbo ? 1.42 : 1.0);
+    const accelForce = car.spec.accel * (usingTurbo ? 1.6 : 1.0);
+
+    if (ctrl.forward > 0) {
+        car.vel.addScaledVector(forwardVec, accelForce * dt);
+    } else if (ctrl.forward < 0) {
+        car.vel.addScaledVector(forwardVec, -accelForce * 0.75 * dt);
+    }
+
+    // Limita velocidade horizontal
+    const horizSpeed = Math.hypot(car.vel.x, car.vel.z);
+    if (horizSpeed > maxSpd) {
+        car.vel.x = (car.vel.x / horizSpeed) * maxSpd;
+        car.vel.z = (car.vel.z / horizSpeed) * maxSpd;
+    }
+
+    // Atrito e Aderência Lateral (Grip vs Drift)
+    const forwardSpeed = car.vel.dot(forwardVec);
+    const lateralSpeed = car.vel.dot(rightVec);
+
+    // Se estiver fazendo drift, reduz a aderência lateral para o carro deslizar de lado
+    const lateralGrip = ctrl.drift ? 2.2 : 7.5;
+    car.vel.addScaledVector(rightVec, -lateralSpeed * Math.min(1, lateralGrip * dt));
+
+    // Resistência ao rolamento quando não acelera
+    if (ctrl.forward === 0) {
+        car.vel.multiplyScalar(Math.max(0, 1 - 1.8 * dt));
+    }
+
+    // Esterçamento (Steering)
+    if (Math.abs(forwardSpeed) > 1.2) {
+        const reverseFactor = forwardSpeed >= 0 ? 1 : -1;
+        const driftTurnBoost = ctrl.drift ? 1.32 : 1.0;
+        const turnRate = car.spec.turnSpeed * driftTurnBoost * Math.min(1, Math.abs(forwardSpeed) / 10);
+        car.yaw += ctrl.turn * turnRate * reverseFactor * dt;
+    }
+
+    // Atualiza posição horizontal
+    car.pos.x += car.vel.x * dt;
+    car.pos.z += car.vel.z * dt;
+    car.speed = forwardSpeed;
+
+    // Suspensão visual (inclinação da carroceria nas curvas e aceleração)
+    const targetRoll = -ctrl.turn * Math.min(1, Math.abs(forwardSpeed) / 25) * (ctrl.drift ? 0.16 : 0.09);
+    const targetPitch = -ctrl.forward * 0.045 - (usingTurbo ? 0.04 : 0);
+    car.chassis.rotation.z = THREE.MathUtils.lerp(car.chassis.rotation.z, targetRoll, dt * 10);
+    car.chassis.rotation.x = THREE.MathUtils.lerp(car.chassis.rotation.x, targetPitch, dt * 10);
+
+    // Rotação das rodas
+    car.wheels.forEach((w, i) => {
+        w.rotation.x += forwardSpeed * dt * 1.6;
+        if (i < 2) w.rotation.y = ctrl.turn * 0.35;
+    });
+
+    // Fumaça de drift nos pneus traseiros
+    if (ctrl.drift && car.grounded && horizSpeed > 14 && Math.random() < 0.45) {
+        spawnParticle(
+            new THREE.Vector3(car.pos.x - forwardVec.x * 1.6, 0.3, car.pos.z - forwardVec.z * 1.6),
+            new THREE.Vector3((Math.random() - 0.5) * 2, 1.5, (Math.random() - 0.5) * 2),
+            0xe4e4e7, 0.4, 0.5
+        );
+    }
+
+    // Gravidade e Rampas
+    let groundHeight = 0;
+    const carRadius = 2.0;
+
+    for (let i = 0; i < GAME.obstacles.length; i++) {
+        const obs = GAME.obstacles[i];
+        if (!obs.alive) continue;
+
+        const dx = car.pos.x - obs.x;
+        const dz = car.pos.z - obs.z;
+
+        if (Math.abs(dx) < obs.rx + carRadius && Math.abs(dz) < obs.rz + carRadius) {
+            if (obs.isRamp) {
+                // Calcula altura progressiva da rampa
+                let progress = 0;
+                if (obs.rampDir === 'N') progress = (obs.rz - dz) / (obs.rz * 2);
+                else if (obs.rampDir === 'S') progress = (dz + obs.rz) / (obs.rz * 2);
+                else if (obs.rampDir === 'E') progress = (dx + obs.rx) / (obs.rx * 2);
+                else if (obs.rampDir === 'W') progress = (obs.rx - dx) / (obs.rx * 2);
+
+                progress = Math.max(0, Math.min(1, progress));
+                const rampY = progress * obs.h;
+                if (rampY > groundHeight) {
+                    groundHeight = rampY;
+                    // Impulso vertical ao atingir o topo da rampa em alta velocidade
+                    if (progress > 0.82 && horizSpeed > 18 && car.velY <= 1) {
+                        car.velY = Math.min(15, horizSpeed * 0.36);
+                        car.grounded = false;
+                    }
+                }
+            } else {
+                // Colisão sólida com parede/contêiner/barril
+                if (obs.isBarrel) {
+                    explodeBarrel(obs);
+                    continue;
+                }
+
+                const overlapX = (obs.rx + carRadius) - Math.abs(dx);
+                const overlapZ = (obs.rz + carRadius) - Math.abs(dz);
+
+                if (overlapX < overlapZ) {
+                    car.pos.x += dx > 0 ? overlapX : -overlapX;
+                    car.vel.x *= -0.45;
+                } else {
+                    car.pos.z += dz > 0 ? overlapZ : -overlapZ;
+                    car.vel.z *= -0.45;
+                }
+            }
+        }
+    }
+
+    // Física Vertical (Salto e Pouso)
+    car.velY -= 28.0 * dt;
+    car.pos.y += car.velY * dt;
+    if (car.pos.y <= groundHeight) {
+        car.pos.y = groundHeight;
+        car.velY = 0;
+        car.grounded = true;
+    } else {
+        car.grounded = false;
+    }
+
+    // Verifica Poças de Lava (Arena Vulcão)
+    for (let lava of GAME.lavaZones) {
+        if (car.grounded && Math.hypot(car.pos.x - lava.x, car.pos.z - lava.z) < lava.r) {
+            damageCar(car, 18 * dt, null);
+            if (Math.random() < 0.3) {
+                spawnParticle(car.pos.clone().add(new THREE.Vector3(0, 0.5, 0)), new THREE.Vector3(0, 4, 0), 0xf97316, 0.35, 0.6);
+            }
+        }
+    }
+
+    // Coleta de Caixas de Power-up
+    for (let p of GAME.pickups) {
+        if (!p.active) continue;
+        if (Math.hypot(car.pos.x - p.x, car.pos.z - p.z) < 3.4) {
+            collectPickup(car, p);
+        }
+    }
+
+    // Fumaça preta se o carro estiver muito danificado (< 40% HP)
+    if (car.hp < car.maxHp * 0.4) {
+        car.smokeTimer -= dt;
+        if (car.smokeTimer <= 0) {
+            car.smokeTimer = 0.08;
+            spawnParticle(
+                car.pos.clone().add(new THREE.Vector3(0, 1.4, 1.0)),
+                new THREE.Vector3((Math.random() - 0.5) * 1.5, 3.5, (Math.random() - 0.5) * 1.5),
+                0x27272a, 0.6, 0.9
+            );
+        }
+    }
+
+    // Atualiza transform do Mesh 3D
+    car.mesh.position.copy(car.pos);
+    car.mesh.rotation.y = car.yaw;
+}
+
+function handleCarToCarCollisions() {
+    const minDist = 3.6;
+    for (let i = 0; i < GAME.cars.length; i++) {
+        const a = GAME.cars[i];
+        if (!a.alive) continue;
+
+        for (let j = i + 1; j < GAME.cars.length; j++) {
+            const b = GAME.cars[j];
+            if (!b.alive) continue;
+
+            const dx = b.pos.x - a.pos.x;
+            const dz = b.pos.z - a.pos.z;
+            const dist = Math.hypot(dx, dz);
+
+            if (dist < minDist && dist > 0.001) {
+                const nx = dx / dist;
+                const nz = dz / dist;
+                const overlap = minDist - dist;
+
+                // Separa os carros proporcionalmente à massa
+                const totalMass = a.spec.mass + b.spec.mass;
+                a.pos.x -= nx * overlap * (b.spec.mass / totalMass);
+                a.pos.z -= nz * overlap * (b.spec.mass / totalMass);
+                b.pos.x += nx * overlap * (a.spec.mass / totalMass);
+                b.pos.z += nz * overlap * (a.spec.mass / totalMass);
+
+                // Velocidade relativa do impacto
+                const rvx = b.vel.x - a.vel.x;
+                const rvz = b.vel.z - a.vel.z;
+                const impactSpeed = Math.abs(rvx * nx + rvz * nz);
+
+                // Empurrão elástico
+                const impulse = impactSpeed * 0.85;
+                a.vel.x -= nx * impulse * (b.spec.mass / totalMass);
+                a.vel.z -= nz * impulse * (b.spec.mass / totalMass);
+                b.vel.x += nx * impulse * (a.spec.mass / totalMass);
+                b.vel.z += nz * impulse * (a.spec.mass / totalMass);
+
+                // Dano por abalroamento se impacto for forte
+                if (impactSpeed > 14) {
+                    const dmgToB = impactSpeed * 0.55 * (a.spec.mass / b.spec.mass);
+                    const dmgToA = impactSpeed * 0.55 * (b.spec.mass / a.spec.mass);
+                    damageCar(b, dmgToB, a);
+                    damageCar(a, dmgToA, b);
+                    spawnParticle(
+                        new THREE.Vector3((a.pos.x + b.pos.x) / 2, 1.2, (a.pos.z + b.pos.z) / 2),
+                        new THREE.Vector3((Math.random() - 0.5) * 8, 5, (Math.random() - 0.5) * 8),
+                        0xfbbf24, 0.3, 0.5
+                    );
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 10. SISTEMA DE ARMAS, MÍSSEIS, MINAS E EXPLOSÕES
+// ==========================================
+function fireMachineGun(car) {
+    if (!car.alive || car.mgCooldown > 0) return;
+    car.mgCooldown = 0.11;
+
+    const forward = new THREE.Vector3(Math.sin(car.yaw), 0, Math.cos(car.yaw));
+    const right = new THREE.Vector3(Math.cos(car.yaw), 0, -Math.sin(car.yaw));
+
+    // Dispara alternando cano esquerdo e direito
+    const side = (Math.floor(performance.now() / 100) % 2 === 0) ? 0.8 : -0.8;
+    const spawnPos = car.pos.clone()
+        .add(new THREE.Vector3(0, 1.15, 0))
+        .addScaledVector(forward, 2.5)
+        .addScaledVector(right, side);
+
+    const bulletGeo = new THREE.BoxGeometry(0.22, 0.22, 1.1);
+    const bulletMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+    const mesh = new THREE.Mesh(bulletGeo, bulletMat);
+    mesh.position.copy(spawnPos);
+    mesh.rotation.y = car.yaw;
+    scene.add(mesh);
+
+    const spread = (Math.random() - 0.5) * 0.04;
+    const dir = new THREE.Vector3(Math.sin(car.yaw + spread), 0, Math.cos(car.yaw + spread));
+
+    GAME.projectiles.push({
+        pos: spawnPos,
+        vel: dir.multiplyScalar(115),
+        type: 'bullet',
+        owner: car,
+        life: 1.1,
+        mesh
+    });
+
+    const distToPlayer = GAME.playerCar ? car.pos.distanceTo(GAME.playerCar.pos) : 0;
+    audio.playMachineGun(distToPlayer);
+}
+
+function fireSpecialWeapon(car) {
+    if (!car.alive || car.specialCooldown > 0 || car.specialAmmo <= 0) return;
+
+    car.specialAmmo--;
+    car.specialCooldown = 0.65;
+
+    const forward = new THREE.Vector3(Math.sin(car.yaw), 0, Math.cos(car.yaw));
+    const distToPlayer = GAME.playerCar ? car.pos.distanceTo(GAME.playerCar.pos) : 0;
+
+    if (car.specialType === 'missile') {
+        // Encontra o inimigo mais próximo à frente do carro para travar a mira
+        let bestTarget = null;
+        let bestScore = Infinity;
+        GAME.cars.forEach(other => {
+            if (other !== car && other.alive) {
+                const toOther = other.pos.clone().sub(car.pos);
+                const dist = toOther.length();
+                if (dist < 130) {
+                    toOther.normalize();
+                    const align = forward.dot(toOther); // 1 = bem na frente
+                    if (align > 0.25 && dist / align < bestScore) {
+                        bestScore = dist / align;
+                        bestTarget = other;
+                    }
+                }
+            }
+        });
+
+        const spawnPos = car.pos.clone().add(new THREE.Vector3(0, 1.6, 0)).addScaledVector(forward, 2.4);
+        const mGroup = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.4, 6), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+        body.rotation.x = Math.PI / 2;
+        mGroup.add(body);
+        mGroup.position.copy(spawnPos);
+        mGroup.rotation.y = car.yaw;
+        scene.add(mGroup);
+
+        GAME.projectiles.push({
+            pos: spawnPos,
+            vel: forward.clone().multiplyScalar(68),
+            type: 'missile',
+            owner: car,
+            target: bestTarget,
+            life: 3.5,
+            mesh: mGroup
+        });
+
+        audio.playMissileLaunch(distToPlayer);
+
+    } else if (car.specialType === 'mine') {
+        // Solta mina terrestre atrás do carro
+        const dropPos = car.pos.clone().add(new THREE.Vector3(0, 0.25, 0)).addScaledVector(forward, -2.8);
+        const mineMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.85, 0.95, 0.35, 10),
+            new THREE.MeshLambertMaterial({ color: 0xf59e0b, emissive: 0xdc2626, emissiveIntensity: 0.4 })
+        );
+        mineMesh.position.copy(dropPos);
+        scene.add(mineMesh);
+
+        GAME.mines.push({
+            pos: dropPos,
+            owner: car,
+            armTimer: 0.6, // Pequeno atraso para não explodir no próprio carro
+            life: 25,
+            mesh: mineMesh
+        });
+    }
+
+    if (car.isPlayer) updateHUD();
+}
+
+function createExplosion(pos, radius = 10, maxDamage = 42, owner = null) {
+    const distToPlayer = GAME.playerCar ? pos.distanceTo(GAME.playerCar.pos) : 0;
+    audio.playExplosion(distToPlayer);
+
+    // Onda de choque expansiva
+    const swGeo = new THREE.RingGeometry(0.5, 1.5, 18);
+    swGeo.rotateX(-Math.PI / 2);
+    const swMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+    const swMesh = new THREE.Mesh(swGeo, swMat);
+    swMesh.position.set(pos.x, pos.y + 0.4, pos.z);
+    scene.add(swMesh);
+    GAME.shockwaves.push({ mesh: swMesh, life: 0.35, maxLife: 0.35 });
+
+    // Partículas de fogo e destroços 3D
+    const colors = [0xef4444, 0xf97316, 0xfacc15, 0x27272a];
+    for (let i = 0; i < 18; i++) {
+        const col = colors[i % colors.length];
+        spawnParticle(
+            pos.clone().add(new THREE.Vector3(0, 1, 0)),
+            new THREE.Vector3(
+                (Math.random() - 0.5) * 22,
+                Math.random() * 14 + 4,
+                (Math.random() - 0.5) * 22
+            ),
+            col,
+            0.55 + Math.random() * 0.25,
+            1.2
+        );
+    }
+
+    // Dano em área e impulso nos carros próximos
+    GAME.cars.forEach(car => {
+        if (!car.alive) return;
+        const d = car.pos.distanceTo(pos);
+        if (d < radius) {
+            const factor = 1 - (d / radius);
+            damageCar(car, maxDamage * factor, owner);
+            const pushDir = car.pos.clone().sub(pos).setY(0).normalize();
+            car.vel.addScaledVector(pushDir, 18 * factor);
+            car.velY += 6 * factor;
+        }
+    });
+}
+
+function explodeBarrel(obs) {
+    if (!obs.alive) return;
+    obs.alive = false;
+    obs.mesh.visible = false;
+    createExplosion(new THREE.Vector3(obs.x, 1, obs.z), 14, 48, null);
+}
+
+function collectPickup(car, pickup) {
+    pickup.active = false;
+    pickup.mesh.visible = false;
+    pickup.respawnTimer = 14.0;
+
+    if (pickup.type === 'missile') {
+        car.specialType = 'missile';
+        car.specialAmmo = Math.min(9, car.specialAmmo + 4);
+    } else if (pickup.type === 'mine') {
+        car.specialType = 'mine';
+        car.specialAmmo = Math.min(9, car.specialAmmo + 4);
+    } else if (pickup.type === 'repair') {
+        car.hp = Math.min(car.maxHp, car.hp + car.maxHp * 0.45);
+    } else if (pickup.type === 'turbo') {
+        car.turbo = 100;
+    }
+
+    if (car.isPlayer) {
+        audio.playPickup();
+        showToast(pickup.label);
+        updateHUD();
+    }
+}
+
+function damageCar(car, amount, attacker) {
+    if (!car.alive) return;
+    car.hp -= amount;
+
+    if (car.isPlayer) {
+        const flash = document.getElementById('damage-flash');
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, 140);
+    }
+
+    if (car.hp <= 0) {
+        car.hp = 0;
+        car.alive = false;
+        createExplosion(car.pos, 14, 25, attacker);
+
+        // Escurece carcaça destruída
+        car.chassis.traverse(child => {
+            if (child.isMesh) {
+                child.material = new THREE.MeshLambertMaterial({ color: 0x18181b });
+            }
+        });
+        car.chassis.rotation.z = 0.25;
+
+        const killerName = attacker ? attacker.name : 'Arena';
+        if (attacker && attacker !== car) {
+            attacker.kills++;
+        }
+        addKillFeed(killerName, car.name);
+        checkMatchEnd();
+    }
+}
+
+// ==========================================
+// 11. INTELIGÊNCIA ARTIFICIAL DOS 9 BOTS
+// ==========================================
+function updateBotsAI(dt) {
+    GAME.cars.forEach(bot => {
+        if (bot.isPlayer || !bot.alive) return;
+
+        bot.aiThinkTimer -= dt;
+        const ctrl = { forward: 1, turn: 0, drift: false, turbo: false };
+
+        // Escolhe objetivo a cada 0.6s (inimigo próximo ou caixa de reparo/arma)
+        if (bot.aiThinkTimer <= 0 || !bot.aiTarget) {
+            bot.aiThinkTimer = 0.5 + Math.random() * 0.4;
+
+            // Se estiver com pouca vida, prioriza caixa de reparo
+            let targetPos = null;
+            if (bot.hp < bot.maxHp * 0.45) {
+                let bestDist = Infinity;
+                GAME.pickups.forEach(p => {
+                    if (p.active && p.type === 'repair') {
+                        const d = bot.pos.distanceTo(new THREE.Vector3(p.x, 0, p.z));
+                        if (d < bestDist) {
+                            bestDist = d;
+                            targetPos = new THREE.Vector3(p.x, 0, p.z);
+                        }
+                    }
+                });
+            }
+
+            if (!targetPos && bot.specialAmmo === 0) {
+                let bestDist = 60;
+                GAME.pickups.forEach(p => {
+                    if (p.active && (p.type === 'missile' || p.type === 'mine')) {
+                        const d = Math.hypot(p.x - bot.pos.x, p.z - bot.pos.z);
+                        if (d < bestDist) { bestDist = d; targetPos = new THREE.Vector3(p.x, 0, p.z); }
+                    }
+                });
+            }
+
+            // Senão, caça o carro vivo mais próximo
+            if (!targetPos) {
+                let bestEnemy = null;
+                let bestDist = Infinity;
+                GAME.cars.forEach(other => {
+                    if (other !== bot && other.alive) {
+                        const d = bot.pos.distanceTo(other.pos);
+                        if (d < bestDist) {
+                            bestDist = d;
+                            bestEnemy = other;
+                        }
+                    }
+                });
+                bot.aiTarget = bestEnemy;
+            } else {
+                bot.aiTarget = { pos: targetPos, isPickup: true };
+            }
+        }
+
+        // Navegação até o alvo + Desvio de paredes da arena
+        const limitSafe = GAME.arenaLimit - 16;
+        let steerTarget = bot.aiTarget ? bot.aiTarget.pos.clone() : new THREE.Vector3(0, 0, 0);
+
+        if (Math.abs(bot.pos.x) > limitSafe || Math.abs(bot.pos.z) > limitSafe) {
+            steerTarget.set(0, 0, 0); // Volta para o centro da arena se estiver perto do muro
+        }
+
+        const toTarget = steerTarget.sub(bot.pos);
+        const distToTarget = toTarget.length();
+        const desiredYaw = Math.atan2(toTarget.x, toTarget.z);
+
+        let angleDiff = desiredYaw - bot.yaw;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        if (angleDiff > 0.12) ctrl.turn = 1;
+        else if (angleDiff < -0.12) ctrl.turn = -1;
+
+        if (Math.abs(angleDiff) > 1.1 && distToTarget > 15) {
+            ctrl.drift = true;
+        }
+        if (distToTarget > 45 && Math.abs(angleDiff) < 0.25 && bot.turbo > 40) {
+            ctrl.turbo = true;
+        }
+
+        updateCarPhysics(bot, ctrl, dt);
+
+        // Combate dos Bots
+        if (bot.aiTarget && !bot.aiTarget.isPickup && bot.aiTarget.alive) {
+            if (distToTarget < 75 && Math.abs(angleDiff) < 0.35) {
+                fireMachineGun(bot);
+            }
+            if (distToTarget < 85 && bot.specialAmmo > 0 && bot.specialCooldown <= 0) {
+                fireSpecialWeapon(bot);
+            }
+        }
+    });
+}
+
+// ==========================================
+// 12. ATUALIZAÇÃO DE PROJÉTEIS, MINAS E EFEITOS
+// ==========================================
+function updateProjectilesAndEffects(dt) {
+    // Caixas de Power-up girando e reaparecendo
+    GAME.pickups.forEach(p => {
+        if (p.active) {
+            const t = performance.now() * 0.004 + p.x;
+            p.model.rotation.y += dt * 1.8;
+            p.model.position.y = Math.sin(t) * 0.25;
+            p.ring.scale.setScalar(1 + Math.sin(t * 1.6) * 0.08);
+            if (p.blink) p.blink.visible = Math.sin(t * 3) > 0;
+        } else {
+            p.respawnTimer -= dt;
+            if (p.respawnTimer <= 0) {
+                p.active = true;
+                p.mesh.visible = true;
+            }
+        }
+    });
+
+    // Projéteis (Balas de metralhadora e Mísseis teleguiados)
+    for (let i = GAME.projectiles.length - 1; i >= 0; i--) {
+        const proj = GAME.projectiles[i];
+        proj.life -= dt;
+
+        // Guiagem automática dos mísseis
+        if (proj.type === 'missile' && proj.target && proj.target.alive) {
+            const desiredDir = proj.target.pos.clone().add(new THREE.Vector3(0, 1.0, 0)).sub(proj.pos).normalize();
+            const currentDir = proj.vel.clone().normalize();
+            currentDir.lerp(desiredDir, dt * 5.5).normalize();
+            proj.vel.copy(currentDir.multiplyScalar(72));
+            proj.mesh.lookAt(proj.pos.clone().add(proj.vel));
+
+            if (Math.random() < 0.6) {
+                spawnParticle(proj.pos.clone(), new THREE.Vector3(0, 0.5, 0), 0xe4e4e7, 0.25, 0.4);
+            }
+        }
+
+        proj.pos.addScaledVector(proj.vel, dt);
+        proj.mesh.position.copy(proj.pos);
+
+        let hitSomething = false;
+
+        // Verifica acerto em carros
+        for (let car of GAME.cars) {
+            if (car === proj.owner || !car.alive) continue;
+            if (proj.pos.distanceTo(car.pos.clone().add(new THREE.Vector3(0, 1, 0))) < 2.6) {
+                if (proj.type === 'bullet') {
+                    damageCar(car, 5.5, proj.owner);
+                    spawnParticle(proj.pos, new THREE.Vector3((Math.random() - 0.5) * 6, 4, (Math.random() - 0.5) * 6), 0xfef08a, 0.2, 0.35);
+                } else {
+                    createExplosion(proj.pos, 11, 36, proj.owner);
+                }
+                hitSomething = true;
+                break;
+            }
+        }
+
+        // Verifica acerto em obstáculos/barris
+        if (!hitSomething) {
+            for (let obs of GAME.obstacles) {
+                if (!obs.alive || obs.isRamp) continue;
+                if (Math.abs(proj.pos.x - obs.x) < obs.rx &&
+                    Math.abs(proj.pos.z - obs.z) < obs.rz &&
+                    proj.pos.y < obs.h) {
+                    if (obs.isBarrel) explodeBarrel(obs);
+                    else if (proj.type === 'missile') createExplosion(proj.pos, 10, 32, proj.owner);
+                    hitSomething = true;
+                    break;
+                }
+            }
+        }
+
+        if (hitSomething || proj.life <= 0) {
+            scene.remove(proj.mesh);
+            GAME.projectiles.splice(i, 1);
+        }
+    }
+
+    // Minas Terrestres
+    for (let i = GAME.mines.length - 1; i >= 0; i--) {
+        const m = GAME.mines[i];
+        m.life -= dt;
+        m.armTimer = Math.max(0, m.armTimer - dt);
+
+        let triggered = false;
+        if (m.armTimer <= 0) {
+            for (let car of GAME.cars) {
+                if (!car.alive) continue;
+                if (car === m.owner && m.life > 22) continue;
+                if (car.pos.distanceTo(m.pos) < 3.0) {
+                    createExplosion(m.pos, 12, 42, m.owner);
+                    triggered = true;
+                    break;
+                }
+            }
+        }
+
+        if (triggered || m.life <= 0) {
+            scene.remove(m.mesh);
+            GAME.mines.splice(i, 1);
+        }
+    }
+
+    // Partículas 3D
+    for (let i = GAME.particles.length - 1; i >= 0; i--) {
+        const pt = GAME.particles[i];
+        pt.life -= dt;
+        pt.vel.y -= 12 * dt;
+        pt.mesh.position.addScaledVector(pt.vel, dt);
+        const s = Math.max(0.01, (pt.life / pt.maxLife) * pt.baseScale);
+        pt.mesh.scale.set(s, s, s);
+        if (pt.life <= 0) {
+            scene.remove(pt.mesh);
+            GAME.particles.splice(i, 1);
+        }
+    }
+
+    // Ondas de choque
+    for (let i = GAME.shockwaves.length - 1; i >= 0; i--) {
+        const sw = GAME.shockwaves[i];
+        sw.life -= dt;
+        const prog = 1 - (sw.life / sw.maxLife);
+        const scale = 1 + prog * 9;
+        sw.mesh.scale.set(scale, scale, 1);
+        sw.mesh.material.opacity = 1 - prog;
+        if (sw.life <= 0) {
+            scene.remove(sw.mesh);
+            GAME.shockwaves.splice(i, 1);
+        }
+    }
+}
+
+function spawnParticle(pos, vel, color, life = 0.4, baseScale = 0.6) {
+    const geo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    scene.add(mesh);
+    GAME.particles.push({ mesh, vel, life, maxLife: life, baseScale });
+}
+
+// ==========================================
+// 13. HUD, RADAR MINIMAPA E FIM DE PARTIDA
+// ==========================================
+const radarCanvas = document.getElementById('radar-canvas');
+const radarCtx = radarCanvas.getContext('2d');
+
+function drawRadar() {
+    const w = radarCanvas.width;
+    const h = radarCanvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = w / 2 - 4;
+
+    radarCtx.clearRect(0, 0, w, h);
+
+    // Grade circular do radar
+    radarCtx.strokeStyle = 'rgba(245, 158, 11, 0.25)';
+    radarCtx.lineWidth = 1;
+    radarCtx.beginPath();
+    radarCtx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
+    radarCtx.stroke();
+    radarCtx.beginPath();
+    radarCtx.moveTo(cx, 0); radarCtx.lineTo(cx, h);
+    radarCtx.moveTo(0, cy); radarCtx.lineTo(w, cy);
+    radarCtx.stroke();
+
+    if (!GAME.playerCar) return;
+    const p = GAME.playerCar;
+    const scale = radius / 150;
+
+    // Desenha caixas de power-up ativas
+    GAME.pickups.forEach(pk => {
+        if (!pk.active) return;
+        const dx = pk.x - p.pos.x;
+        const dz = pk.z - p.pos.z;
+        // Rotaciona relativo à orientação do jogador
+        const rx = (-dx * Math.cos(p.yaw) + dz * Math.sin(p.yaw)) * scale;
+        const ry = (-dx * Math.sin(p.yaw) - dz * Math.cos(p.yaw)) * scale;
+        if (Math.hypot(rx, ry) < radius - 4) {
+            radarCtx.fillStyle = '#38bdf8';
+            radarCtx.fillRect(cx + rx - 2, cy + ry - 2, 4, 4);
+        }
+    });
+
+    // Desenha carros inimigos vivos
+    GAME.cars.forEach(c => {
+        if (c.isPlayer || !c.alive) return;
+        const dx = c.pos.x - p.pos.x;
+        const dz = c.pos.z - p.pos.z;
+        const rx = (-dx * Math.cos(p.yaw) + dz * Math.sin(p.yaw)) * scale;
+        const ry = (-dx * Math.sin(p.yaw) - dz * Math.cos(p.yaw)) * scale;
+        const dist = Math.hypot(rx, ry);
+        const clamped = Math.min(dist, radius - 5);
+        const angle = Math.atan2(ry, rx);
+
+        radarCtx.fillStyle = '#ef4444';
+        radarCtx.beginPath();
+        radarCtx.arc(cx + Math.cos(angle) * clamped, cy + Math.sin(angle) * clamped, 4, 0, Math.PI * 2);
+        radarCtx.fill();
+    });
+
+    // Jogador no centro (triângulo apontando para cima)
+    radarCtx.fillStyle = '#22c55e';
+    radarCtx.beginPath();
+    radarCtx.moveTo(cx, cy - 6);
+    radarCtx.lineTo(cx - 4.5, cy + 5);
+    radarCtx.lineTo(cx + 4.5, cy + 5);
+    radarCtx.closePath();
+    radarCtx.fill();
+}
+
+function updateHUD() {
+    const p = GAME.playerCar;
+    if (!p) return;
+
+    const hpPct = Math.max(0, Math.ceil((p.hp / p.maxHp) * 100));
+    document.getElementById('hud-hp-text').textContent = `${hpPct}%`;
+    document.getElementById('hud-hp-bar').style.width = `${hpPct}%`;
+
+    const turboPct = Math.round(p.turbo);
+    document.getElementById('hud-turbo-text').textContent = `${turboPct}%`;
+    document.getElementById('hud-turbo-bar').style.width = `${turboPct}%`;
+
+    const specialLabel = p.specialType === 'missile' ? 'MÍSSIL TELEGUIADO' : 'MINA TERRESTRE';
+    document.getElementById('hud-special-name').textContent = specialLabel;
+    document.getElementById('hud-special-ammo').textContent = p.specialAmmo;
+
+    const kmh = Math.round(Math.hypot(p.vel.x, p.vel.z) * 3.4);
+    document.getElementById('hud-speed').textContent = kmh;
+
+    const aliveCount = GAME.cars.filter(c => c.alive).length;
+    document.getElementById('hud-alive').textContent = aliveCount;
+    document.getElementById('hud-kills').textContent = p.kills;
+
+    drawRadar();
+}
+
+function showToast(text) {
+    const toast = document.getElementById('pickup-toast');
+    toast.textContent = text;
+    toast.style.opacity = '1';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 1800);
+}
+
+function addKillFeed(killer, victim) {
+    const feed = document.getElementById('killfeed');
+    const div = document.createElement('div');
+    div.className = 'bg-zinc-950/85 border border-amber-500/40 px-2.5 py-1 rounded text-white shadow';
+    div.innerHTML = `<span class="text-amber-400 font-bold">${killer}</span> 💥 <span class="text-red-400 font-bold">${victim}</span>`;
+    feed.prepend(div);
+    if (feed.children.length > 4) feed.removeChild(feed.lastChild);
+    setTimeout(() => { if (div.parentNode) div.remove(); }, 4500);
+}
+
+function checkMatchEnd() {
+    if (GAME.state !== 'PLAYING') return;
+    const aliveCars = GAME.cars.filter(c => c.alive);
+    const p = GAME.playerCar;
+
+    if (!p.alive || aliveCars.length <= 1) {
+        GAME.state = 'GAMEOVER';
+        audio.updateEngine(0, false);
+
+        const won = p.alive && aliveCars.length === 1;
+        const rank = won ? 1 : aliveCars.length + 1;
+
+        document.getElementById('end-title').textContent = won ? 'REI DA ARENA!' : 'VEÍCULO DESTRUÍDO!';
+        document.getElementById('end-title').className = `font-hud text-4xl font-extrabold italic mb-2 ${won ? 'text-amber-400' : 'text-red-500'}`;
+        document.getElementById('end-subtitle').textContent = won
+            ? 'Todos os 9 rivais foram reduzidos a sucata!'
+            : 'Seu carro não resistiu ao fogo cruzado da arena.';
+        document.getElementById('end-kills').textContent = p.kills;
+        document.getElementById('end-rank').textContent = `#${rank}`;
+
+        setTimeout(() => {
+            document.getElementById('gameover-modal').classList.remove('hidden');
+        }, 900);
+    }
+}
+
+// ==========================================
+// 14. NAVEGAÇÃO DE MENU E LOOP PRINCIPAL
+// ==========================================
+document.querySelectorAll('.veh-card').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.veh-card').forEach(b => {
+            b.classList.remove('border-amber-500', 'bg-amber-500/15');
+            b.classList.add('border-zinc-700', 'bg-zinc-800/70');
+        });
+        btn.classList.remove('border-zinc-700', 'bg-zinc-800/70');
+        btn.classList.add('border-amber-500', 'bg-amber-500/15');
+        GAME.selectedVehicle = btn.dataset.vehicle;
+    });
+});
+
+document.querySelectorAll('.arena-card').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.arena-card').forEach(b => {
+            b.classList.remove('border-amber-500', 'bg-amber-500/15');
+            b.classList.add('border-zinc-700', 'bg-zinc-800/70');
+        });
+        btn.classList.remove('border-zinc-700', 'bg-zinc-800/70');
+        btn.classList.add('border-amber-500', 'bg-amber-500/15');
+        GAME.selectedArena = btn.dataset.arena;
+    });
+});
+
+function startGame() {
+    audio.init();
+    document.getElementById('main-menu').classList.add('hidden');
+    document.getElementById('gameover-modal').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('killfeed').innerHTML = '';
+
+    if (GAME.isMobile) {
+        document.getElementById('touch-controls').classList.remove('hidden');
+    }
+
+    buildArena(GAME.selectedArena);
+    spawnVehicles();
+    GAME.state = 'PLAYING';
+    updateHUD();
+}
+
+function openGarageMenu() {
+    GAME.state = 'MENU';
+    audio.updateEngine(0, false);
+    document.getElementById('gameover-modal').classList.add('hidden');
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('touch-controls').classList.add('hidden');
+    document.getElementById('main-menu').classList.remove('hidden');
+}
+
+document.getElementById('btn-start').addEventListener('click', startGame);
+document.getElementById('btn-replay').addEventListener('click', startGame);
+document.getElementById('btn-change-setup').addEventListener('click', openGarageMenu);
+document.getElementById('btn-menu-ingame').addEventListener('click', openGarageMenu);
+
+let lastTime = performance.now();
+const camPosSmooth = new THREE.Vector3();
+const camLookSmooth = new THREE.Vector3();
+
+function animate(now) {
+    requestAnimationFrame(animate);
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+
+    if (GAME.state === 'PLAYING' || GAME.state === 'GAMEOVER') {
+        const p = GAME.playerCar;
+
+        if (GAME.state === 'PLAYING' && p && p.alive) {
+            readPlayerInputs();
+            updateCarPhysics(p, input, dt);
+
+            if (input.fireMG) {
+                fireMachineGun(p);
+            }
+
+            const spdRatio = Math.hypot(p.vel.x, p.vel.z) / p.spec.maxSpeed;
+            audio.updateEngine(spdRatio, input.turbo && p.turbo > 2);
+        }
+
+        updateBotsAI(dt);
+        handleCarToCarCollisions();
+        updateProjectilesAndEffects(dt);
+        updateHUD();
+
+        // Câmera dinâmica em 3ª pessoa seguindo o carro do jogador
+        if (p) {
+            const forward = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw));
+            const desiredCamPos = p.pos.clone()
+                .addScaledVector(forward, -12.5)
+                .add(new THREE.Vector3(0, 6.2, 0));
+            const desiredLookAt = p.pos.clone()
+                .addScaledVector(forward, 8.0)
+                .add(new THREE.Vector3(0, 1.5, 0));
+
+            camPosSmooth.lerp(desiredCamPos, dt * 8.5);
+            camLookSmooth.lerp(desiredLookAt, dt * 12);
+            camera.position.copy(camPosSmooth);
+            camera.lookAt(camLookSmooth);
+        }
+
+    } else if (GAME.state === 'MENU') {
+        // Câmera girando ao redor da arena no fundo do menu
+        const t = now * 0.00025;
+        camera.position.set(Math.cos(t) * 85, 36, Math.sin(t) * 85);
+        camera.lookAt(0, 2, 0);
+    }
+
+    renderer.render(scene, camera);
+}
+
+window.onload = function () {
+    buildArena('canion');
+    animate(performance.now());
+};
+</script>
+</body>
+</html>

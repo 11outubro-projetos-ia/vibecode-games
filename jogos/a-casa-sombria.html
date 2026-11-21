@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meu Jogo - Terror</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#070909;color:white;font-family:Arial;text-align:center}
+h1{color:#ff3948;font-size:23px;margin:12px 0}
+#info{font-size:15px;line-height:1.8;margin:8px}
+canvas{display:block;width:96%;max-width:800px;height:auto;margin:auto;border:2px solid #59615b;background:#111}
+#msg{min-height:40px;padding:10px;color:#ffaaaa;font-size:14px}
+.controls{display:grid;grid-template-columns:repeat(3,65px);gap:7px;justify-content:center}
+button{background:#252b2a;color:white;border:1px solid #69716e;border-radius:10px;font-size:22px;padding:10px;min-height:48px;touch-action:none}
+button:active{background:#a52630}
+.actions{display:flex;justify-content:center;gap:8px;margin:9px;flex-wrap:wrap}
+.actions button{font-size:14px}
+select{background:#252b2a;color:white;border:1px solid #69716e;border-radius:10px;font-size:14px;padding:10px;min-height:48px}
+#torch{background:#5a3412;border-color:#c98a3a}
+</style>
+<style>/* ajuste Fliperama: canvas cabe na altura da tela */ #game{width:auto;height:auto;max-width:96%;max-height:max(200px,calc(100vh - 340px))}</style>
+</head>
+<body>
+<h1>MEU JOGO: A CASA SOMBRIA</h1>
+<div id="info">
+  🎯 Fase: <span id="round">1</span>/<span id="maxRound">8</span>
+  &nbsp; 🔑 Chaves: <span id="keys">0</span>/<span id="total">3</span>
+  <br>❤️ Vidas: <span id="life">3</span>
+  &nbsp; 🔥 Tochas: <span id="tochas">0</span>/<span id="tochasTotal">0</span>
+</div>
+<canvas id="game" width="800" height="560"></canvas>
+<div id="msg">Encontre as chaves e fuja do monstro!</div>
+<div class="controls">
+  <div></div><button data-dir="up">▲</button><div></div>
+  <button data-dir="left">◀</button>
+  <button data-dir="down">▼</button>
+  <button data-dir="right">▶</button>
+</div>
+<div class="actions">
+  <button id="torch">🔥 Acender (E)</button>
+  <select id="dif" aria-label="Dificuldade">
+    <option value="facil">😊 Fácil</option>
+    <option value="normal" selected>😨 Normal</option>
+    <option value="dificil">💀 Difícil</option>
+  </select>
+  <button id="restart">↻ Recomeçar</button>
+</div>
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+/* ============================================================
+   A CASA SOMBRIA
+   A casa é escura: o jogador só enxerga um pouco ao seu redor.
+   Onde pegou uma chave fica uma velinha acesa.
+   Tochas nas paredes podem ser acesas com a tecla E.
+   ============================================================ */
+const c=document.getElementById('game'),ctx=c.getContext('2d');
+const W=800,H=560,T=40;            // tamanho da tela e de cada bloco
+const MAX_FASE=8;
+const held={};
+
+/* camada da escuridão (desenhada separada e depois colocada por cima) */
+const dark=document.createElement('canvas');dark.width=W;dark.height=H;
+const dctx=dark.getContext('2d');
+
+const DIF={
+ facil:  {nome:'Fácil',  luz:155,vidas:5,vel:0.78,visao:6},
+ normal: {nome:'Normal', luz:125,vidas:3,vel:1.0, visao:8},
+ dificil:{nome:'Difícil',luz:100,vidas:2,vel:1.2, visao:11}
+};
+let dif=DIF.normal;
+
+let grid,cols,rows,player,monsters,keys,torches,exit,start;
+let round,life,collected,total,playing,finished,invincible,last=0,cam={x:0,y:0},tempo=0,perigo=0,passoT=0,coracaoT=0;
+
+function msg(t){document.getElementById('msg').textContent=t}
+function d(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+const rnd=n=>Math.floor(Math.random()*n);
+
+/* ---------- GERAÇÃO DO MAPA (labirinto com alguns atalhos) ---------- */
+function gerarMapa(fase){
+ cols=21+Math.min(14,(fase-1)*2);          // 21 → 35 blocos de largura
+ rows=15+Math.min(10,(fase-1)*2);          // 15 → 25 blocos de altura
+ grid=[];for(let y=0;y<rows;y++){grid.push(new Array(cols).fill(1));}
+ // labirinto com backtracking
+ const pilha=[[1,1]];grid[1][1]=0;
+ while(pilha.length){
+  const [x,y]=pilha[pilha.length-1];
+  const viz=[[2,0],[-2,0],[0,2],[0,-2]].map(([dx,dy])=>[x+dx,y+dy,x+dx/2,y+dy/2])
+   .filter(([nx,ny])=>nx>0&&ny>0&&nx<cols-1&&ny<rows-1&&grid[ny][nx]===1);
+  if(!viz.length){pilha.pop();continue;}
+  const [nx,ny,mx,my]=viz[rnd(viz.length)];
+  grid[my][mx]=0;grid[ny][nx]=0;pilha.push([nx,ny]);
+ }
+ // abre atalhos (deixa o labirinto com caminhos alternativos para fugir)
+ const atalhos=Math.floor(cols*rows*0.045);
+ for(let i=0;i<atalhos;i++){
+  const x=1+rnd(cols-2),y=1+rnd(rows-2);
+  if(grid[y][x]!==1)continue;
+  const h=grid[y][x-1]===0&&grid[y][x+1]===0,v=grid[y-1][x]===0&&grid[y+1][x]===0;
+  if(h!==v)grid[y][x]=0;
+ }
+ // algumas salas abertas
+ for(let i=0;i<2+Math.floor(fase/2);i++){
+  const rw=3+rnd(2),rh=3+rnd(2),rx=1+rnd(cols-rw-2),ry=1+rnd(rows-rh-2);
+  for(let y=ry;y<ry+rh;y++)for(let x=rx;x<rx+rw;x++)grid[y][x]=0;
+ }
+}
+const livre=(tx,ty)=>tx>=0&&ty>=0&&tx<cols&&ty<rows&&grid[ty][tx]===0;
+const centro=(tx,ty)=>({x:tx*T+T/2,y:ty*T+T/2});
+const blocoDe=p=>({tx:Math.floor(p.x/T),ty:Math.floor(p.y/T)});
+
+/* distância andando (BFS) a partir de um bloco */
+function bfs(tx,ty){
+ const dist=[];for(let y=0;y<rows;y++)dist.push(new Array(cols).fill(-1));
+ const fila=[[tx,ty]];dist[ty][tx]=0;
+ for(let i=0;i<fila.length;i++){
+  const [x,y]=fila[i];
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const nx=x+dx,ny=y+dy;
+   if(livre(nx,ny)&&dist[ny][nx]<0){dist[ny][nx]=dist[y][x]+1;fila.push([nx,ny]);}
+  }
+ }
+ return dist;
+}
+/* próximo bloco no caminho de (a) até (b) */
+function proximoPasso(a,b){
+ const dist=bfs(b.tx,b.ty);
+ if(dist[a.ty][a.tx]<0)return null;
+ let melhor=null,md=dist[a.ty][a.tx];
+ for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const nx=a.tx+dx,ny=a.ty+dy;
+  if(livre(nx,ny)&&dist[ny][nx]>=0&&dist[ny][nx]<md){md=dist[ny][nx];melhor={tx:nx,ty:ny};}
+ }
+ return {passo:melhor,dist:dist[a.ty][a.tx]};
+}
+
+/* ---------- COLISÃO ---------- */
+function blocked(x,y,r){
+ const x0=Math.floor((x-r)/T),x1=Math.floor((x+r)/T),y0=Math.floor((y-r)/T),y1=Math.floor((y+r)/T);
+ for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+  if(livre(tx,ty))continue;
+  const px=Math.max(tx*T,Math.min(x,tx*T+T)),py=Math.max(ty*T,Math.min(y,ty*T+T));
+  if(Math.hypot(x-px,y-py)<r)return true;
+ }
+ return false;
+}
+function move(o,dx,dy,dt){
+ const nx=o.x+dx*dt,ny=o.y+dy*dt;
+ if(!blocked(nx,o.y,o.r))o.x=nx;
+ if(!blocked(o.x,ny,o.r))o.y=ny;
+}
+
+/* ---------- INÍCIO DE FASE ---------- */
+function updateInfo(){
+ document.getElementById('round').textContent=round;
+ document.getElementById('maxRound').textContent=MAX_FASE;
+ document.getElementById('keys').textContent=collected;
+ document.getElementById('total').textContent=total;
+ document.getElementById('life').textContent=life;
+ document.getElementById('tochas').textContent=torches.filter(t=>t.lit).length;
+ document.getElementById('tochasTotal').textContent=torches.length;
+}
+function startRound(n){
+ round=n;
+ gerarMapa(n);
+ start={tx:1,ty:1};
+ const p0=centro(1,1);
+ player={x:p0.x,y:p0.y,r:12,speed:165};
+ const dist=bfs(1,1);
+ // todas as casas livres com a distância do início
+ const casas=[];
+ for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)if(dist[y][x]>0)casas.push({tx:x,ty:y,d:dist[y][x]});
+ casas.sort((a,b)=>b.d-a.d);
+ // saída: a casa mais longe do início
+ const s=casas[0];exit={...centro(s.tx,s.ty),tx:s.tx,ty:s.ty};
+ // chaves espalhadas
+ total=[3,3,4,4,5,5,6,7][n-1];
+ keys=[];
+ const candidatas=casas.filter(k=>k.d>6&&!(k.tx===s.tx&&k.ty===s.ty));
+ for(let tent=0;keys.length<total&&tent<3000;tent++){
+  const k=candidatas[rnd(candidatas.length)];
+  const p=centro(k.tx,k.ty);
+  if(keys.some(o=>d(o,p)<T*5))continue;
+  keys.push({...p,got:false});
+ }
+ while(keys.length<total){const k=candidatas[rnd(candidatas.length)];keys.push({...centro(k.tx,k.ty),got:false});}
+ // monstros longe do jogador
+ const qtd=n<=2?1:n<=5?2:3;
+ monsters=[];
+ const longe=casas.filter(k=>k.d>Math.max(12,casas[0].d*0.45));
+ for(let i=0;i<qtd;i++){
+  const k=longe[rnd(longe.length)]||casas[0];
+  const p=centro(k.tx,k.ty);
+  monsters.push({x:p.x,y:p.y,r:14,speed:(55+n*8)*dif.vel,state:'vagar',alvo:null,repath:0,passo:null,olho:Math.random()*6});
+ }
+ // tochas presas nas paredes, viradas para um corredor
+ torches=[];
+ const qtdT=Math.max(5,12-Math.floor(n/2)+Math.floor(cols*rows/220));
+ for(let tent=0;torches.length<qtdT&&tent<4000;tent++){
+  const tx=1+rnd(cols-2),ty=1+rnd(rows-2);
+  if(livre(tx,ty))continue;
+  const viz=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>livre(tx+dx,ty+dy));
+  if(!viz.length)continue;
+  const [dx,dy]=viz[rnd(viz.length)];
+  const p={x:tx*T+T/2+dx*T*0.55,y:ty*T+T/2+dy*T*0.55,lit:false,dx,dy};
+  if(torches.some(o=>d(o,p)<T*4))continue;
+  if(d(p,player)<T*2)continue;
+  torches.push(p);
+ }
+ collected=0;invincible=1.5;playing=true;perigo=0;
+ updateInfo();
+ msg('Fase '+n+': encontre '+total+' chaves no escuro e chegue à saída. Aperte E perto das tochas 🔥 para acendê-las.');
+}
+function reset(){
+ dif=DIF[document.getElementById('dif').value];
+ life=dif.vidas;finished=false;startRound(1);
+}
+
+/* ---------- TOCHAS ---------- */
+function acenderTocha(){
+ if(!playing)return;
+ let perto=null,md=58;
+ for(const t of torches){if(t.lit)continue;const dd=d(t,player);if(dd<md){md=dd;perto=t;}}
+ if(perto){perto.lit=true;updateInfo();SOM.ruido(.35,.12,2200);SOM.tom(180,.3,'sawtooth',.03,90);msg('🔥 Tocha acesa! O monstro fica mais lento perto da luz.');}
+ else msg('Não há nenhuma tocha apagada aqui perto.');
+}
+function naLuzDeTocha(p){return torches.some(t=>t.lit&&d(t,p)<150);}
+
+/* ---------- ATUALIZAÇÃO ---------- */
+function update(dt){
+ tempo+=dt;
+ if(!playing||finished)return;
+ invincible=Math.max(0,invincible-dt);
+ let dx=0,dy=0;
+ if(held.up||held.ArrowUp||held.w||held.W)dy--;
+ if(held.down||held.ArrowDown||held.s||held.S)dy++;
+ if(held.left||held.ArrowLeft||held.a||held.A)dx--;
+ if(held.right||held.ArrowRight||held.d||held.D)dx++;
+ if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2}
+ move(player,dx*player.speed,dy*player.speed,dt);
+ if(dx||dy){passoT-=dt;if(passoT<=0){passoT=.33;SOM.passo();}}
+ for(const k of keys){
+  if(!k.got&&d(player,k)<30){
+   k.got=true;collected++;updateInfo();
+   SOM.item();
+   msg('🔑 Chave encontrada! '+collected+'/'+total+'. Uma velinha ficou acesa aqui.');
+   if(collected===total){msg('Todas as chaves! Encontre a SAÍDA — ela agora brilha em verde.');setTimeout(()=>SOM.seq([392,523,659],.15,'triangle',.07,.12),300);}
+  }
+ }
+ if(collected===total&&d(player,exit)<30){
+  playing=false;
+  if(round<MAX_FASE)SOM.fase();else SOM.vitoria();
+  if(round<MAX_FASE){
+   msg('FASE '+round+' CONCLUÍDA! A próxima casa é maior...');
+   setTimeout(()=>{if(!finished&&life>0)startRound(round+1)},1300);
+  }else{finished=true;msg('🏆 PARABÉNS! Você escapou das '+MAX_FASE+' casas no modo '+dif.nome+'!');}
+  return;
+ }
+ // batimento do coração conforme o perigo
+ if(perigo>0){coracaoT-=dt;if(coracaoT<=0){coracaoT=perigo>0.7?.45:.8;SOM.tom(55,.12,'sine',.2);SOM.tom(48,.12,'sine',.15,null,.14);}}
+ // monstros
+ const pb=blocoDe(player);
+ perigo=0;
+ for(const m of monsters){
+  m.repath-=dt;
+  const mb=blocoDe(m);
+  if(m.repath<=0){
+   m.repath=0.35;
+   const r=proximoPasso(mb,pb);
+   const distPasso=r?r.dist:99;
+   if(m.state==='vagar'&&distPasso<=dif.visao)m.state='cacar';
+   if(m.state==='cacar'&&distPasso>dif.visao+5)m.state='vagar';
+   if(m.state==='cacar'){m.passo=r&&r.passo;}
+   else{
+    if(!m.alvo||(mb.tx===m.alvo.tx&&mb.ty===m.alvo.ty)){
+     let a;do{a={tx:1+rnd(cols-2),ty:1+rnd(rows-2)};}while(!livre(a.tx,a.ty));m.alvo=a;
+    }
+    const w=proximoPasso(mb,m.alvo);m.passo=w&&w.passo;if(!m.passo)m.alvo=null;
+   }
+   perigo=Math.max(perigo,distPasso<=4?1:distPasso<=7?0.5:0);
+  }else{
+   const dd=d(m,player)/T;perigo=Math.max(perigo,dd<4?1:dd<7?0.5:0);
+  }
+  // anda até o centro do próximo bloco
+  const alvoP=m.passo?centro(m.passo.tx,m.passo.ty):centro(mb.tx,mb.ty);
+  if(m.state==='cacar'&&mb.tx===pb.tx&&mb.ty===pb.ty){alvoP.x=player.x;alvoP.y=player.y;}
+  const ddx=alvoP.x-m.x,ddy=alvoP.y-m.y,dist=Math.hypot(ddx,ddy);
+  let vel=m.speed*(m.state==='cacar'?1:0.6)*(naLuzDeTocha(m)?0.5:1);
+  if(dist>1){const st=Math.min(dist,vel*dt);m.x+=ddx/dist*st;m.y+=ddy/dist*st;}
+  if(d(player,m)<player.r+m.r-2&&invincible<=0){
+   life--;invincible=2;updateInfo();
+   SOM.susto();
+   if(life<=0){playing=false;msg('FIM DE JOGO! Toque em Recomeçar.');setTimeout(SOM.derrota,500);}
+   else{
+    msg('O monstro te pegou! Vidas: '+life+'. Você voltou para a entrada.');
+    const p0=centro(start.tx,start.ty);player.x=p0.x;player.y=p0.y;
+    // o monstro some na escuridão e reaparece longe da entrada
+    const dd=bfs(start.tx,start.ty),longe=[];
+    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)if(dd[y][x]>12)longe.push({x,y});
+    if(longe.length){const k=longe[rnd(longe.length)],p=centro(k.x,k.y);m.x=p.x;m.y=p.y;}
+    m.state='vagar';m.alvo=null;m.repath=0;
+   }
+  }
+ }
+}
+
+/* ---------- DESENHO ---------- */
+function luz(g,x,y,r,forca){
+ const gr=g.createRadialGradient(x,y,0,x,y,r);
+ gr.addColorStop(0,'rgba(0,0,0,'+forca+')');
+ gr.addColorStop(0.55,'rgba(0,0,0,'+(forca*0.75)+')');
+ gr.addColorStop(1,'rgba(0,0,0,0)');
+ g.fillStyle=gr;g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();
+}
+function brilho(x,y,r,cor){
+ const gr=ctx.createRadialGradient(x,y,0,x,y,r);
+ gr.addColorStop(0,cor);gr.addColorStop(1,'rgba(0,0,0,0)');
+ ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+}
+function draw(){
+ const mw=cols*T,mh=rows*T;
+ cam.x=mw<=W?(mw-W)/2:Math.max(0,Math.min(mw-W,player.x-W/2));
+ cam.y=mh<=H?(mh-H)/2:Math.max(0,Math.min(mh-H,player.y-H/2));
+ ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+ ctx.save();ctx.translate(-Math.round(cam.x),-Math.round(cam.y));
+ // chão e paredes visíveis
+ const x0=Math.max(0,Math.floor(cam.x/T)),x1=Math.min(cols-1,Math.floor((cam.x+W)/T));
+ const y0=Math.max(0,Math.floor(cam.y/T)),y1=Math.min(rows-1,Math.floor((cam.y+H)/T));
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+  const px=x*T,py=y*T;
+  if(grid[y][x]===0){
+   ctx.fillStyle=(x+y)%2?'#2a221b':'#241d17';ctx.fillRect(px,py,T,T);
+   ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(px,py+T-3,T,3);
+  }else{
+   ctx.fillStyle='#4a4f4b';ctx.fillRect(px,py,T,T);
+   ctx.fillStyle='#5d635e';ctx.fillRect(px,py,T,6);
+   ctx.strokeStyle='#363a37';ctx.lineWidth=1;
+   ctx.strokeRect(px+0.5,py+0.5,T/2,T/2-6);ctx.strokeRect(px+T/2+0.5,py+T/2+0.5,T/2-1,T/2-1);
+  }
+ }
+ // saída
+ ctx.fillStyle=collected===total?'#16db79':'#77272d';
+ ctx.fillRect(exit.x-16,exit.y-20,32,40);
+ ctx.fillStyle='#0b0b0b';ctx.fillRect(exit.x-11,exit.y-14,22,34);
+ ctx.fillStyle=collected===total?'#16db79':'#a33';ctx.font='bold 18px Arial';ctx.textAlign='center';
+ ctx.fillText('🚪',exit.x,exit.y+7);
+ // chaves (ainda não pegas) e velinhas onde já pegou
+ for(const k of keys){
+  if(k.got){
+   ctx.fillStyle='#e8dcc0';ctx.fillRect(k.x-3,k.y-6,6,10);
+   const f=Math.sin(tempo*12+k.x)*1.5;
+   ctx.fillStyle='#ffb02e';ctx.beginPath();ctx.ellipse(k.x,k.y-10+f*0.3,3,5+f*0.4,0,0,7);ctx.fill();
+   ctx.fillStyle='#fff3a0';ctx.beginPath();ctx.arc(k.x,k.y-9,1.6,0,7);ctx.fill();
+  }else{
+   ctx.save();ctx.shadowColor='#ffe65a';ctx.shadowBlur=14;
+   ctx.fillStyle='#ffe65a';ctx.beginPath();ctx.arc(k.x-6,k.y,7,0,Math.PI*2);ctx.fill();
+   ctx.fillStyle='#241d17';ctx.beginPath();ctx.arc(k.x-6,k.y,3,0,Math.PI*2);ctx.fill();
+   ctx.fillStyle='#ffe65a';ctx.fillRect(k.x,k.y-2,12,4);ctx.fillRect(k.x+8,k.y-2,3,8);ctx.fillRect(k.x+3,k.y-2,3,6);
+   ctx.restore();
+  }
+ }
+ // tochas
+ for(const t of torches){
+  ctx.fillStyle='#3a2410';ctx.fillRect(t.x-3,t.y-4,6,12);
+  ctx.fillStyle='#777';ctx.fillRect(t.x-5,t.y-6,10,3);
+  if(t.lit){
+   const f=Math.sin(tempo*14+t.x)*2;
+   brilho(t.x,t.y-10,30,'rgba(255,150,40,.45)');
+   ctx.fillStyle='#ff7a1a';ctx.beginPath();ctx.ellipse(t.x,t.y-12,5,9+f,0,0,7);ctx.fill();
+   ctx.fillStyle='#ffe066';ctx.beginPath();ctx.ellipse(t.x,t.y-10,2.5,5+f*0.5,0,0,7);ctx.fill();
+  }else if(d(t,player)<58&&playing){
+   ctx.fillStyle='#fff';ctx.font='bold 12px Arial';ctx.textAlign='center';ctx.fillText('E',t.x,t.y-14);
+  }
+ }
+ // monstros
+ for(const m of monsters){
+  const pulo=Math.sin(tempo*8+m.olho)*1.5;
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(m.x,m.y+12,13,4,0,0,7);ctx.fill();
+  ctx.fillStyle=m.state==='cacar'?'#c41f30':'#7d1b25';
+  ctx.beginPath();ctx.arc(m.x,m.y+pulo,m.r,Math.PI,0);ctx.lineTo(m.x+m.r,m.y+m.r);
+  for(let i=0;i<4;i++)ctx.lineTo(m.x+m.r-(i+0.5)*m.r/2,m.y+m.r-(i%2?0:5));
+  ctx.lineTo(m.x-m.r,m.y+m.r);ctx.closePath();ctx.fill();
+  ctx.fillStyle=m.state==='cacar'?'#fff36b':'#fff';
+  ctx.fillRect(m.x-7,m.y-4+pulo,4,5);ctx.fillRect(m.x+3,m.y-4+pulo,4,5);
+ }
+ // jogador
+ if(!(invincible>0&&Math.floor(tempo*10)%2)){
+  ctx.fillStyle='#65dcff';ctx.beginPath();ctx.arc(player.x,player.y,player.r,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#0d2a3a';ctx.fillRect(player.x-5,player.y-4,3,4);ctx.fillRect(player.x+2,player.y-4,3,4);
+ }
+ ctx.restore();
+
+ // ESCURIDÃO: camada separada com "buracos" de luz
+ dctx.globalCompositeOperation='source-over';
+ dctx.clearRect(0,0,W,H);
+ dctx.fillStyle='rgba(2,2,4,.975)';dctx.fillRect(0,0,W,H);
+ dctx.globalCompositeOperation='destination-out';
+ const sx=x=>x-cam.x,sy=y=>y-cam.y;
+ const tremor=1+Math.sin(tempo*9)*0.02+Math.random()*0.015;
+ luz(dctx,sx(player.x),sy(player.y),dif.luz*tremor,1);
+ for(const k of keys)if(k.got)luz(dctx,sx(k.x),sy(k.y-6),52+Math.sin(tempo*10+k.x)*4,0.85);
+ for(const t of torches)if(t.lit)luz(dctx,sx(t.x),sy(t.y),165+Math.sin(tempo*7+t.y)*6,1);
+ if(collected===total)luz(dctx,sx(exit.x),sy(exit.y),70,0.9);
+ ctx.drawImage(dark,0,0);
+ // brilho quente das luzes por cima da escuridão
+ ctx.save();ctx.translate(-cam.x,-cam.y);ctx.globalCompositeOperation='lighter';
+ for(const t of torches)if(t.lit)brilho(t.x,t.y,120,'rgba(120,60,10,.18)');
+ for(const k of keys)if(k.got)brilho(k.x,k.y-6,40,'rgba(120,70,10,.18)');
+ if(collected===total)brilho(exit.x,exit.y,60,'rgba(20,160,80,.25)');
+ ctx.restore();
+ // perigo: bordas vermelhas quando o monstro está perto
+ if(perigo>0&&playing){
+  const a=(0.15+0.2*Math.abs(Math.sin(tempo*(perigo>0.7?9:5))))*perigo;
+  const v=ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,W*0.65);
+  v.addColorStop(0,'rgba(160,0,0,0)');v.addColorStop(1,'rgba(160,0,0,'+a+')');
+  ctx.fillStyle=v;ctx.fillRect(0,0,W,H);
+ }
+ // seta discreta para a saída quando tem todas as chaves
+ if(collected===total&&playing){
+  const a=Math.atan2(exit.y-player.y,exit.x-player.x),r=dif.luz*0.8;
+  const ax=sx(player.x)+Math.cos(a)*r,ay=sy(player.y)+Math.sin(a)*r;
+  ctx.save();ctx.translate(ax,ay);ctx.rotate(a);ctx.fillStyle='rgba(22,219,121,.8)';
+  ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(-6,-7);ctx.lineTo(-6,7);ctx.fill();ctx.restore();
+ }
+ if(!playing){
+  ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(40,210,720,120);
+  ctx.fillStyle=finished?'#55ffad':life<=0?'#ff5964':'#ffe27a';
+  ctx.textAlign='center';ctx.font='bold 28px Arial';
+  ctx.fillText(finished?'VOCÊ ESCAPOU!':life<=0?'FIM DE JOGO':'FASE '+round+' CONCLUÍDA',400,265);
+  ctx.font='16px Arial';ctx.fillStyle='#ddd';
+  ctx.fillText(finished?'Modo '+dif.nome+' completo!':life<=0?'Toque em Recomeçar para tentar de novo':'Preparando uma casa maior...',400,300);
+ }
+ ctx.textAlign='left';
+}
+function loop(t){
+ let dt=Math.min((t-last)/1000||0,.04);last=t;
+ update(dt);draw();requestAnimationFrame(loop);
+}
+
+/* ---------- CONTROLES ---------- */
+document.addEventListener('keydown',e=>{
+ held[e.key]=true;
+ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
+ if((e.key==='e'||e.key==='E'||e.key===' ')&&!e.repeat)acenderTocha();
+});
+document.addEventListener('keyup',e=>held[e.key]=false);
+window.addEventListener('blur',()=>{for(const k in held)held[k]=false});
+document.querySelectorAll('[data-dir]').forEach(b=>{
+ const dir=b.dataset.dir;
+ b.addEventListener('pointerdown',e=>{
+  e.preventDefault();held[dir]=true;
+  if(b.setPointerCapture)b.setPointerCapture(e.pointerId);
+ });
+ const stop=e=>{e.preventDefault();held[dir]=false};
+ b.addEventListener('pointerup',stop);
+ b.addEventListener('pointercancel',stop);
+ b.addEventListener('lostpointercapture',()=>held[dir]=false);
+});
+document.getElementById('torch').onclick=acenderTocha;
+document.getElementById('dif').onchange=e=>{e.target.blur();for(const k in held)held[k]=false;reset();};
+document.getElementById('restart').onclick=()=>{
+ for(const k in held)held[k]=false;
+ reset();
+};
+reset();requestAnimationFrame(loop);
+</script>
+</body>
+</html>

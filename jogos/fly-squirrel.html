@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fly Squirrel — Esquilo Voador</title>
+<style>
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #32b7ee;
+  font-family: system-ui, sans-serif;
+}
+#wrap {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  touch-action: none;
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="480" height="800"></canvas>
+</div>
+
+<script>
+(() => {
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const W = 480, H = 800, GROUND = 730;
+
+let state = 'START';
+let score = 0;
+let best = 0;
+let frame = 0;
+let last = 0;
+let world = 0;
+let pipes = [];
+let acorns = [];
+let distPipe = 0;
+let overAt = 0;
+
+try {
+  best = +(localStorage.getItem('fly_squirrel_best') || 0);
+} catch(e) {}
+
+function resize() {
+  const wrap = document.getElementById('wrap');
+  const scale = Math.min(
+    wrap.clientWidth / W,
+    wrap.clientHeight / H
+  );
+  canvas.style.width = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+
+addEventListener('resize', resize);
+resize();
+
+// SONS
+const sound = {
+  ctx: null,
+
+  init() {
+    try {
+      if (!this.ctx) {
+        this.ctx = new (
+          window.AudioContext ||
+          window.webkitAudioContext
+        )();
+      }
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+    } catch(e) {}
+  },
+
+  beep(f = 500, d = 0.09, type = 'sine') {
+    if (!this.ctx) return;
+
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    const t = this.ctx.currentTime;
+
+    o.type = type;
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + d);
+
+    o.connect(g);
+    g.connect(this.ctx.destination);
+
+    o.start(t);
+    o.stop(t + d);
+  }
+};
+
+// ESQUILO VOADOR
+const squirrel = {
+  x: 115,
+  y: 350,
+  vy: 0,
+  rot: 0,
+  wing: 0,
+
+  reset() {
+    this.y = 350;
+    this.vy = 0;
+    this.rot = 0;
+    this.wing = 0;
+  },
+
+  flap() {
+    if (state === 'START' || state === 'OVER') {
+      start();
+    }
+
+    sound.init();
+    this.vy = -5.7;
+    this.wing = 1;
+    sound.beep(620, 0.08);
+  },
+
+  update(dt) {
+    const s = dt / 16.67;
+
+    this.vy += 0.28 * s;
+    this.vy = Math.min(this.vy, 7.5);
+    this.y += this.vy * s;
+
+    this.rot = Math.max(
+      -0.48,
+      Math.min(0.9, this.vy * 0.09)
+    );
+
+    this.wing += 0.25 * s;
+  },
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+
+    // Cauda fofa
+    ctx.fillStyle = '#8b4b25';
+    ctx.strokeStyle = '#4d2b1d';
+    ctx.lineWidth = 3;
+
+    ctx.beginPath();
+    ctx.moveTo(-13, 7);
+    ctx.bezierCurveTo(-37, 3, -40, -20, -27, -27);
+    ctx.bezierCurveTo(-16, -34, -6, -21, -12, -12);
+    ctx.bezierCurveTo(-3, -15, 0, -3, -13, 7);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#c77b3d';
+    ctx.beginPath();
+    ctx.ellipse(-25, -18, 8, 10, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Corpo
+    ctx.fillStyle = '#a85e2b';
+    ctx.beginPath();
+    ctx.ellipse(-1, 5, 19, 15, -0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Membrana de voo
+    const wingLift = Math.sin(this.wing * 2) * 4;
+
+    ctx.fillStyle = '#e8bd83';
+    ctx.strokeStyle = '#60351f';
+    ctx.lineWidth = 2.5;
+
+    ctx.beginPath();
+    ctx.moveTo(-10, 2);
+    ctx.quadraticCurveTo(1, -7 + wingLift, 10, -5);
+    ctx.lineTo(18, 15);
+    ctx.quadraticCurveTo(2, 17, -10, 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Barriga
+    ctx.fillStyle = '#f3d7a6';
+    ctx.beginPath();
+    ctx.ellipse(5, 8, 10, 9, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cabeça
+    ctx.fillStyle = '#b96b34';
+    ctx.beginPath();
+    ctx.arc(10, -8, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Orelha
+    ctx.fillStyle = '#a85e2b';
+    ctx.beginPath();
+    ctx.ellipse(2, -20, 5, 8, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#e99a91';
+    ctx.beginPath();
+    ctx.ellipse(2, -20, 2.5, 4, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Focinho
+    ctx.fillStyle = '#f3d7a6';
+    ctx.beginPath();
+    ctx.ellipse(20, -4, 7, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nariz
+    ctx.fillStyle = '#38231c';
+    ctx.beginPath();
+    ctx.arc(26, -5, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Olho
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(14, -11, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#142033';
+    ctx.beginPath();
+    ctx.arc(16, -11, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(17, -12, 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Patinhas
+    ctx.strokeStyle = '#60351f';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-7, 15);
+    ctx.lineTo(-11, 20);
+    ctx.moveTo(3, 17);
+    ctx.lineTo(0, 21);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+};
+
+// CANOS
+function makePipe() {
+  const gap = Math.max(140, 174 - score * 1.5);
+  const top = 125 + Math.random() * 285;
+  const mexe = score >= 15 && Math.random() < 0.35;
+
+  pipes.push({
+    x: W + 35,
+    top,
+    base: top,
+    gap,
+    mexe,
+    fase: Math.random() * 6,
+    passed: false
+  });
+  // às vezes uma bolota aparece no meio do vão
+  if (Math.random() < 0.5) acorns.push({ pipe: pipes[pipes.length - 1], got: false });
+}
+
+// INICIAR JOGO
+function start() {
+  sound.init();
+
+  state = 'PLAY';
+  score = 0;
+  frame = 0;
+  world = 0;
+  pipes = [];
+  acorns = [];
+  distPipe = 0;
+
+  squirrel.reset();
+  makePipe();
+  last = 0;
+}
+
+function gameOver() {
+  if (state !== 'PLAY') return;
+
+  state = 'OVER';
+  overAt = performance.now();
+  sound.beep(180, 0.28, 'triangle');
+  setTimeout(() => sound.beep(120, 0.35, 'triangle'), 200);
+  if (score > best && score > 0) [660, 880, 1100].forEach((f, i) => setTimeout(() => sound.beep(f, 0.12, 'square'), 450 + i * 120));
+
+  if (score > best) {
+    best = score;
+
+    try {
+      localStorage.setItem('fly_squirrel_best', best);
+    } catch(e) {}
+  }
+}
+
+// RETÂNGULOS ARREDONDADOS
+function rounded(x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+  ctx.fillStyle = fill;
+  ctx.fill();
+
+  if (stroke) {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+  }
+}
+
+// NUVENS
+function drawCloud(x, y, s = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath();
+  ctx.arc(0, 8, 18, 0, Math.PI * 2);
+  ctx.arc(20, 0, 25, 0, Math.PI * 2);
+  ctx.arc(44, 10, 17, 0, Math.PI * 2);
+  ctx.arc(22, 15, 24, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// FUNDO
+function drawBackground() {
+  const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+  sky.addColorStop(0, '#27aee8');
+  sky.addColorStop(1, '#a6edff');
+
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // Sol
+  ctx.fillStyle = 'rgba(255,236,120,.25)';
+  ctx.beginPath();
+  ctx.arc(390, 105, 52, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffec78';
+  ctx.beginPath();
+  ctx.arc(390, 105, 34, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Nuvens em movimento
+  for (let i = 0; i < 5; i++) {
+    let x = ((i * 137 - world * 0.18) % (W + 130));
+
+    if (x < -70) x += W + 130;
+
+    drawCloud(
+      x,
+      105 + (i % 3) * 105,
+      0.65 + (i % 3) * 0.18
+    );
+  }
+
+  // Montanhas
+  ctx.fillStyle = '#62c5e5';
+  ctx.beginPath();
+  ctx.moveTo(0, 570);
+  ctx.lineTo(90, 465);
+  ctx.lineTo(180, 565);
+  ctx.lineTo(285, 445);
+  ctx.lineTo(405, 565);
+  ctx.lineTo(480, 500);
+  ctx.lineTo(480, 650);
+  ctx.lineTo(0, 650);
+  ctx.fill();
+
+  // Prédios
+  for (let i = 0; i < 10; i++) {
+    let x = ((i * 65 - world * 0.32) % (W + 80));
+
+    if (x < -60) x += W + 80;
+
+    const bh = 65 + (i * 37 % 95);
+
+    ctx.fillStyle = i % 2 ? '#45acd8' : '#369dce';
+    ctx.fillRect(x, 650 - bh, 42, bh);
+
+    ctx.fillStyle = '#83dcf2';
+
+    for (let wx = x + 8; wx < x + 36; wx += 14) {
+      for (let wy = 665 - bh; wy < 640; wy += 22) {
+        ctx.fillRect(wx, wy, 7, 10);
+      }
+    }
+  }
+
+  // Árvores
+  for (let i = 0; i < 17; i++) {
+    let x = ((i * 34 - world * 0.55) % (W + 60));
+
+    if (x < -30) x += W + 60;
+
+    ctx.fillStyle = i % 2 ? '#27b77a' : '#43c778';
+    ctx.beginPath();
+    ctx.arc(x, 682 - (i % 3) * 8, 25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Água
+  ctx.fillStyle = '#39c4ef';
+  ctx.fillRect(0, 680, W, 50);
+
+  ctx.fillStyle = '#82edff';
+  ctx.fillRect(0, 680, W, 5);
+
+  for (let i = 0; i < 8; i++) {
+    let x = ((i * 79 - world * 1.2) % (W + 50));
+
+    if (x < -30) x += W + 50;
+
+    ctx.fillStyle = '#66ddf7';
+    ctx.fillRect(x, 699 + (i % 3) * 12, 24, 3);
+  }
+
+  // Chão
+  ctx.fillStyle = '#67d52e';
+  ctx.fillRect(0, GROUND, W, H - GROUND);
+
+  ctx.fillStyle = '#a0ed36';
+  ctx.fillRect(0, GROUND, W, 9);
+
+  ctx.fillStyle = '#258d35';
+  ctx.fillRect(0, GROUND + 25, W, 7);
+
+  ctx.fillStyle = '#8b4b2b';
+  ctx.fillRect(0, GROUND + 37, W, H - GROUND - 37);
+
+  for (let y = GROUND + 42; y < H; y += 24) {
+    for (let x = -(world * 0.8 % 38); x < W; x += 38) {
+      ctx.fillStyle =
+        ((Math.floor(x / 38) + Math.floor(y / 24)) % 2)
+        ? '#9c5933' : '#784024';
+
+      ctx.fillRect(x, y, 19, 12);
+    }
+  }
+
+  for (let x = -(world * 1.5 % 40); x < W; x += 40) {
+    ctx.fillStyle = '#37b62f';
+    ctx.fillRect(x, GROUND + 8, 23, 10);
+  }
+}
+
+// DESENHAR CANOS
+function drawAcorn(a) {
+  if (a.got) return;
+  const p = a.pipe, x = p.x + 33, y = p.top + p.gap / 2 + Math.sin(frame * 0.1) * 4;
+  ctx.fillStyle = '#8b5a2b'; ctx.beginPath(); ctx.ellipse(x, y + 3, 9, 11, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#5a3a1a'; ctx.beginPath(); ctx.ellipse(x, y - 6, 11, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#3a2410'; ctx.fillRect(x - 1, y - 14, 2, 5);
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.arc(x - 3, y + 1, 2.5, 0, Math.PI * 2); ctx.fill();
+}
+function drawPipe(p) {
+  const x = p.x;
+  const w = 66;
+  const bottomY = p.top + p.gap;
+
+  // Cano superior
+  ctx.fillStyle = '#178c37';
+  ctx.fillRect(x, 0, w, p.top - 10);
+
+  ctx.fillStyle = '#62e52d';
+  ctx.fillRect(x + 7, 0, 13, p.top - 10);
+
+  ctx.fillStyle = '#2bbd37';
+  ctx.fillRect(x + 23, 0, 27, p.top - 10);
+
+  ctx.fillStyle = '#116d2e';
+  ctx.fillRect(x + w - 8, 0, 8, p.top - 10);
+
+  ctx.fillStyle = '#208d31';
+  ctx.fillRect(x - 5, p.top - 20, w + 10, 20);
+
+  ctx.fillStyle = '#78ed35';
+  ctx.fillRect(x + 1, p.top - 18, 12, 16);
+
+  ctx.strokeStyle = '#14562c';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(x, p.top - 20, w, 20);
+
+  // Cano inferior
+  ctx.fillStyle = '#178c37';
+  ctx.fillRect(x, bottomY, w, GROUND - bottomY + 5);
+
+  ctx.fillStyle = '#62e52d';
+  ctx.fillRect(x + 7, bottomY, 13, GROUND - bottomY + 5);
+
+  ctx.fillStyle = '#2bbd37';
+  ctx.fillRect(x + 23, bottomY, 27, GROUND - bottomY + 5);
+
+  ctx.fillStyle = '#116d2e';
+  ctx.fillRect(x + w - 8, bottomY, 8, GROUND - bottomY + 5);
+
+  ctx.fillStyle = '#208d31';
+  ctx.fillRect(x - 5, bottomY, w + 10, 20);
+
+  ctx.fillStyle = '#78ed35';
+  ctx.fillRect(x + 1, bottomY + 2, 12, 15);
+
+  ctx.strokeStyle = '#14562c';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(x - 5, bottomY, w + 10, 20);
+}
+
+// PONTUAÇÃO
+function drawHUD() {
+  rounded(15, 18, 132, 74, 13, 'rgba(10,42,75,.86)', '#fff');
+
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 15px system-ui';
+  ctx.fillText('PONTOS', 81, 44);
+
+  ctx.font = '900 29px system-ui';
+  ctx.fillText(score, 81, 77);
+
+  rounded(W - 147, 18, 132, 74, 13, 'rgba(10,42,75,.86)', '#fff');
+
+  ctx.font = 'bold 15px system-ui';
+  ctx.fillText('RECORDE', W - 81, 44);
+
+  ctx.font = '900 29px system-ui';
+  ctx.fillText(best, W - 81, 77);
+
+  ctx.textAlign = 'left';
+}
+
+// TELAS
+function panel(title, subtitle, lines) {
+  ctx.fillStyle = 'rgba(4,23,45,.35)';
+  ctx.fillRect(0, 0, W, H);
+
+  rounded(35, 230, 410, 300, 24, 'rgba(8,39,69,.94)', '#e9faff');
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffe65c';
+  ctx.font = '900 34px system-ui';
+  ctx.fillText(title, W / 2, 285);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 17px system-ui';
+  ctx.fillText(subtitle, W / 2, 321);
+
+  ctx.font = '15px system-ui';
+
+  lines.forEach((s, i) => {
+    ctx.fillText(s, W / 2, 359 + i * 27);
+  });
+
+  rounded(95, 455, 290, 48, 24, '#28c66b', '#b8ff83');
+
+  ctx.fillStyle = '#103a25';
+  ctx.font = '900 17px system-ui';
+
+  ctx.fillText(
+    state === 'START' ? 'TOQUE PARA VOAR' : 'JOGAR NOVAMENTE',
+    W / 2,
+    485
+  );
+
+  ctx.textAlign = 'left';
+}
+
+// DESENHAR TELA
+function draw() {
+  drawBackground();
+
+  pipes.forEach(drawPipe);
+  acorns.forEach(drawAcorn);
+  squirrel.draw();
+  drawHUD();
+
+  if (state === 'START') {
+    panel('FLY SQUIRREL', 'O esquilo voador!', [
+      'Toque na tela ou pressione ESPAÇO',
+      'Toque para bater as asas e subir',
+      'Passe entre os canos sem encostar!'
+    ]);
+  }
+
+  if (state === 'OVER') {
+    const medalha = score >= 40 ? '🥇 Medalha de OURO!' : score >= 20 ? '🥈 Medalha de PRATA!' : score >= 10 ? '🥉 Medalha de BRONZE!' : 'Faça 10 pontos para ganhar medalha';
+    panel('FIM DE JOGO!', `Pontuação: ${score}`, [
+      medalha + '  ·  Recorde: ' + best,
+      'Toque ou pressione ESPAÇO',
+      'para jogar novamente'
+    ]);
+  }
+}
+
+// ATUALIZAR JOGO
+function update(dt) {
+  const s = dt / 16.67;
+
+  world += 2.3 * s;
+
+  if (state !== 'PLAY') return;
+
+  frame++;
+  squirrel.update(dt);
+
+  const vel = 2.65 + Math.min(1.4, score * 0.045);
+  distPipe += vel * s;
+  if (distPipe >= 250) {
+    distPipe = 0;
+    makePipe();
+  }
+
+  for (const p of pipes) {
+    p.x -= vel * s;
+    if (p.mexe) { p.fase += 0.025 * s; p.top = Math.max(90, Math.min(GROUND - p.gap - 60, p.base + Math.sin(p.fase) * 45)); }
+
+    const sx = squirrel.x;
+    const sy = squirrel.y;
+    const r = 14;
+
+    // Colisão com canos
+    if (
+      sx + r > p.x - 4 &&
+      sx - r < p.x + 70 &&
+      (
+        sy - r < p.top - 17 ||
+        sy + r > p.top + p.gap + 3
+      )
+    ) {
+      gameOver();
+    }
+
+    // Pontuação ao passar
+    if (!p.passed && p.x + 66 < sx) {
+      p.passed = true;
+      score++;
+      sound.beep(820, 0.08);
+    }
+  }
+
+  pipes = pipes.filter(p => p.x > -90);
+
+  for (const a of acorns) {
+    if (a.got) continue;
+    const ax = a.pipe.x + 33, ay = a.pipe.top + a.pipe.gap / 2;
+    if (Math.hypot(ax - squirrel.x, ay - squirrel.y) < 24) {
+      a.got = true;
+      score++;
+      sound.beep(1050, 0.06, 'square');
+      setTimeout(() => sound.beep(1400, 0.1, 'square'), 60);
+    }
+  }
+  acorns = acorns.filter(a => a.pipe.x > -90 && !a.got);
+
+  // Colisão com teto e chão
+  if (squirrel.y - 18 < 0 || squirrel.y + 18 > GROUND) {
+    gameOver();
+  }
+}
+
+// LOOP PRINCIPAL
+function loop(now) {
+  const dt = Math.min(35, now - (last || now));
+
+  last = now;
+  update(dt);
+  draw();
+
+  requestAnimationFrame(loop);
+}
+
+// CONTROLES
+function input() {
+  sound.init();
+  if (state === 'OVER' && performance.now() - overAt < 700) return;
+  if (state !== 'PLAY') {
+    start();
+    squirrel.flap();
+  } else {
+    squirrel.flap();
+  }
+}
+
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  input();
+});
+
+addEventListener('keydown', e => {
+  if (['Space', 'ArrowUp', 'KeyW', 'Enter'].includes(e.code)) {
+    e.preventDefault();
+
+    if (!e.repeat) input();
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) last = 0;
+});
+
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

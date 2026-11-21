@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corrida Insana</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #101820;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  user-select: none;
+}
+
+h1 {
+  color: #ffb000;
+  margin: 12px;
+}
+
+#painel {
+  display: flex;
+  justify-content: space-around;
+  font-size: 18px;
+  margin: 10px;
+}
+
+#pista {
+  position: relative;
+  width: min(94vw, 380px);
+  height: 55vh;
+  min-height: 350px;
+  max-height: 600px;
+  margin: auto;
+  overflow: hidden;
+  background: #333;
+  border-left: 12px solid #777;
+  border-right: 12px solid #777;
+  border-radius: 8px;
+}
+
+#grama {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg, #176b32 0px, #176b32 35px,
+    #1d793b 35px, #1d793b 70px
+  );
+}
+
+#asfalto {
+  position: absolute;
+  left: 8%;
+  width: 84%;
+  height: 100%;
+  background: #383b40;
+}
+
+.linha {
+  position: absolute;
+  top: -100px;
+  height: 200%;
+  width: 5px;
+  background: repeating-linear-gradient(
+    to bottom, white 0px, white 55px,
+    transparent 55px, transparent 100px
+  );
+  animation: pista .25s linear infinite;
+}
+
+.l1 { left: 33.33%; }
+.l2 { left: 66.66%; }
+
+@keyframes pista {
+  from { background-position-y: 0; }
+  to { background-position-y: 100px; }
+}
+
+.carro {
+  position: absolute;
+  width: 48px;
+  height: 84px;
+  border-radius: 14px 14px 8px 8px;
+  background: linear-gradient(90deg,#a80000,#ff3333,#d60000);
+  border: 2px solid #ff7777;
+  box-shadow: 0 5px 8px #111;
+}
+
+.carro::before {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: 7px;
+  width: 30px;
+  height: 27px;
+  background: linear-gradient(#a9d9ed,#263e53);
+  border: 2px solid #222;
+  border-radius: 6px;
+}
+
+.carro::after {
+  content: "";
+  position: absolute;
+  bottom: 7px;
+  left: 8px;
+  width: 28px;
+  height: 6px;
+  background: #ffcc00;
+  border-radius: 3px;
+}
+
+.roda {
+  position: absolute;
+  width: 6px;
+  height: 16px;
+  background: #111;
+  border-radius: 3px;
+}
+
+.r1 { left:-5px; top:15px; }
+.r2 { right:-5px; top:15px; }
+.r3 { left:-5px; top:55px; }
+.r4 { right:-5px; top:55px; }
+
+#jogador {
+  bottom: 22px;
+  left: 0;
+  z-index: 5;
+  transition: left .12s;
+}
+
+.inimigo {
+  background: linear-gradient(90deg,#0044aa,#3388ff,#0044aa);
+  border-color: #88bbff;
+}
+
+.inimigo::after {
+  background: #ff3333;
+}
+
+#controles {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px auto;
+}
+
+button {
+  border: none;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.volante {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: radial-gradient(circle,#555 20%,#222 55%,#111 65%,#555 75%,#111 100%);
+  border: 9px solid #222;
+  box-shadow: 0 5px 12px #000;
+  font-size: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.pedal {
+  width: 72px;
+  height: 105px;
+  border-radius: 15px;
+  border: 3px solid #222;
+  box-shadow: 0 5px 10px #000;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.acelerador {
+  background: linear-gradient(#16bb50,#075d27);
+}
+
+.freio {
+  background: linear-gradient(#ff4444,#8c0000);
+}
+
+.moeda-pista{position:absolute;font-size:26px;z-index:3;filter:drop-shadow(0 0 6px #ffcc00)}
+.texto-pista{position:absolute;left:50%;top:35%;transform:translateX(-50%);z-index:9;color:#ffb000;font-weight:bold;font-size:22px;text-shadow:2px 2px 0 #000;animation:sobeTxt .9s forwards;pointer-events:none;white-space:nowrap}
+@keyframes sobeTxt{to{top:20%;opacity:0}}
+.carro.batido{animation:batida .5s;filter:brightness(.6)}
+@keyframes batida{25%{transform:rotate(-12deg)}50%{transform:rotate(10deg)}75%{transform:rotate(-6deg)}}
+#resultado{white-space:pre-line}
+.dica-teclado{color:#999;font-size:13px;margin:6px}
+#mensagem {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: none;
+  background: #000d;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  font-size: 24px;
+}
+
+#reiniciar {
+  background: #ffb000;
+  color: black;
+  padding: 15px 25px;
+  border-radius: 12px;
+  margin: 15px;
+}
+
+@media(max-width:380px) {
+  #controles { gap: 6px; }
+  .volante { width:85px; height:85px; font-size:38px; }
+  .pedal { width:62px; height:90px; font-size:12px; }
+}
+</style>
+</head>
+
+<body>
+
+<h1>🏎️ CORRIDA INSANA</h1>
+
+<div id="painel">
+  <span>🏁 <b id="pontos">0</b></span>
+  <span>🚀 <b id="velocidade">0</b> km/h</span>
+</div>
+
+<div id="pista">
+  <div id="grama"></div>
+  <div id="asfalto"></div>
+  <div class="linha l1"></div>
+  <div class="linha l2"></div>
+
+  <div id="jogador" class="carro">
+    <div class="roda r1"></div>
+    <div class="roda r2"></div>
+    <div class="roda r3"></div>
+    <div class="roda r4"></div>
+  </div>
+
+  <div id="mensagem">
+    <b>💥 FIM DE CORRIDA</b>
+    <p id="resultado"></p>
+    <button id="reiniciar" onclick="reiniciar()">
+      JOGAR NOVAMENTE
+    </button>
+  </div>
+</div>
+
+<div id="controles">
+  <button id="freio" class="pedal freio">
+    🛑<br>FREIO
+  </button>
+
+  <button id="volante" class="volante">🛞</button>
+
+  <button id="acelerador" class="pedal acelerador">
+    🟢<br>ACELERAR
+  </button>
+</div>
+
+<button id="reiniciar" onclick="reiniciar()">
+  🔄 REINICIAR
+</button>
+<p class="dica-teclado">Computador: ← → mudam de faixa, ↑ acelera, ↓ freia. Celular: toque nos lados da pista ou gire o volante.</p>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+const pista = document.getElementById("pista");
+const jogador = document.getElementById("jogador");
+const volante = document.getElementById("volante");
+const acelerador = document.getElementById("acelerador");
+const freio = document.getElementById("freio");
+
+const pontosTexto = document.getElementById("pontos");
+const velocidadeTexto = document.getElementById("velocidade");
+const mensagem = document.getElementById("mensagem");
+const resultado = document.getElementById("resultado");
+const linhas = document.querySelectorAll(".linha");
+
+let velocidade = 0;
+let pontos = 0;
+let faixa = 1;
+let acelerando = false;
+let freando = false;
+let jogo = true;
+let inimigos = [];
+let moedas = [];
+
+let volanteAtivo = false;
+let inicioX = 0;
+let anguloVolante = 0;
+
+let ultimoTempo = 0;
+let tempoSpawn = 0;
+let tempoMoeda = 0;
+let nivel = 1;
+let recorde = 0;
+try { recorde = +(localStorage.getItem("corrida-insana-recorde") || 0); } catch (e) {}
+
+const CORES = [
+  ["#0044aa","#3388ff","#88bbff"], ["#0a7a2a","#2fd36a","#8ff0b0"], ["#7a4a00","#ffb000","#ffe08a"],
+  ["#5a1a8a","#a64dff","#d9b3ff"], ["#333","#888","#ccc"]
+];
+
+/* motor: som contínuo que fica mais agudo com a velocidade */
+let motor = null;
+function ligarMotor() {
+  if (motor || SOM.mudo) return;
+  try {
+    const A = new (window.AudioContext || window.webkitAudioContext)();
+    const o = A.createOscillator(), f = A.createBiquadFilter(), g = A.createGain();
+    o.type = "sawtooth"; o.frequency.value = 40;
+    f.type = "lowpass"; f.frequency.value = 400;
+    g.gain.value = 0;
+    o.connect(f); f.connect(g); g.connect(A.destination); o.start();
+    motor = { A, o, g };
+  } catch (e) {}
+}
+function atualizarMotor() {
+  if (!motor) return;
+  motor.o.frequency.value = 40 + velocidade * 0.45;
+  motor.g.gain.value = jogo && !SOM.mudo ? 0.02 + Math.min(0.03, velocidade / 10000) : 0;
+}
+
+function posicaoFaixa(f) {
+  const largura = pista.clientWidth * 0.84 / 3;
+  return pista.clientWidth * 0.08 + largura * f + largura / 2 - 24;
+}
+
+function posicionarCarro() {
+  jogador.style.left = posicaoFaixa(faixa) + "px";
+}
+
+function virar(direcao) {
+  if (!jogo) return;
+  const nova = Math.max(0, Math.min(2, faixa + direcao));
+  if (nova !== faixa) SOM.tom(300, 0.08, "triangle", 0.04, 500);
+  faixa = nova;
+  posicionarCarro();
+}
+
+/* VOLANTE */
+volante.addEventListener("pointerdown", e => {
+  if (!jogo) return;
+  ligarMotor();
+  volanteAtivo = true;
+  inicioX = e.clientX;
+  volante.setPointerCapture(e.pointerId);
+});
+
+volante.addEventListener("pointermove", e => {
+  if (!volanteAtivo || !jogo) return;
+  const movimento = e.clientX - inicioX;
+  anguloVolante += movimento * 2;
+  anguloVolante = Math.max(-180, Math.min(180, anguloVolante));
+  volante.style.transform = `rotate(${anguloVolante}deg)`;
+  if (movimento > 35) { virar(1); inicioX = e.clientX; anguloVolante = 0; }
+  if (movimento < -35) { virar(-1); inicioX = e.clientX; anguloVolante = 0; }
+});
+
+function soltarVolante() {
+  volanteAtivo = false;
+  anguloVolante = 0;
+  volante.style.transform = "rotate(0deg)";
+}
+volante.addEventListener("pointerup", soltarVolante);
+volante.addEventListener("pointercancel", soltarVolante);
+
+/* tocar na pista: lado esquerdo/direito muda de faixa */
+pista.addEventListener("pointerdown", e => {
+  if (!jogo || e.target.closest("button")) return;
+  ligarMotor();
+  const r = pista.getBoundingClientRect();
+  virar(e.clientX < r.left + r.width / 2 ? -1 : 1);
+});
+
+/* PEDAIS */
+function ligarPedal(botao, tipo) {
+  botao.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    if (!jogo) return;
+    ligarMotor();
+    if (tipo === "acelerador") acelerando = true;
+    if (tipo === "freio") freando = true;
+    botao.setPointerCapture(e.pointerId);
+  });
+  function soltar() {
+    if (tipo === "acelerador") acelerando = false;
+    if (tipo === "freio") freando = false;
+  }
+  botao.addEventListener("pointerup", soltar);
+  botao.addEventListener("pointercancel", soltar);
+  botao.addEventListener("lostpointercapture", soltar);
+}
+ligarPedal(acelerador, "acelerador");
+ligarPedal(freio, "freio");
+
+/* TECLADO (computador) */
+document.addEventListener("keydown", e => {
+  const k = e.key.toLowerCase();
+  if (["arrowleft","arrowright","arrowup","arrowdown"," "].includes(k)) e.preventDefault();
+  ligarMotor();
+  if ((k === "arrowleft" || k === "a") && !e.repeat) virar(-1);
+  if ((k === "arrowright" || k === "d") && !e.repeat) virar(1);
+  if (k === "arrowup" || k === "w") acelerando = true;
+  if (k === "arrowdown" || k === "s") freando = true;
+  if ((k === " " || k === "enter") && !jogo) reiniciar();
+});
+document.addEventListener("keyup", e => {
+  const k = e.key.toLowerCase();
+  if (k === "arrowup" || k === "w") acelerando = false;
+  if (k === "arrowdown" || k === "s") freando = false;
+});
+window.addEventListener("blur", () => { acelerando = freando = false; });
+
+/* CRIAR CARROS */
+function criarInimigo(faixaInimigo) {
+  const carro = document.createElement("div");
+  carro.className = "carro inimigo";
+  carro.innerHTML = `
+    <div class="roda r1"></div>
+    <div class="roda r2"></div>
+    <div class="roda r3"></div>
+    <div class="roda r4"></div>
+  `;
+  const cor = CORES[Math.floor(Math.random() * CORES.length)];
+  carro.style.background = `linear-gradient(90deg,${cor[0]},${cor[1]},${cor[0]})`;
+  carro.style.borderColor = cor[2];
+  carro.style.left = posicaoFaixa(faixaInimigo) + "px";
+  carro.style.top = "-100px";
+  pista.appendChild(carro);
+  // cada carro anda numa velocidade um pouco diferente
+  inimigos.push({ elemento: carro, y: -100, faixa: faixaInimigo, ritmo: 0.85 + Math.random() * 0.3, passou: false });
+}
+function criarMoeda() {
+  const m = document.createElement("div");
+  m.className = "moeda-pista";
+  m.textContent = "🪙";
+  const f = Math.floor(Math.random() * 3);
+  m.style.left = (posicaoFaixa(f) + 10) + "px";
+  m.style.top = "-40px";
+  pista.appendChild(m);
+  moedas.push({ elemento: m, y: -40 });
+}
+
+/* COLISÃO */
+function colisao(a, b, folga) {
+  const r1 = a.getBoundingClientRect();
+  const r2 = b.getBoundingClientRect();
+  folga = folga === undefined ? 5 : folga;
+  return r1.left < r2.right - folga && r1.right > r2.left + folga && r1.top < r2.bottom - folga && r1.bottom > r2.top + folga;
+}
+
+function fim() {
+  jogo = false;
+  acelerando = false;
+  freando = false;
+  SOM.explosao();
+  jogador.classList.add("batido");
+  mensagem.style.display = "flex";
+  const p = Math.floor(pontos);
+  let txt = "Pontuação: " + p + " · Nível " + nivel;
+  if (p > recorde) {
+    recorde = p;
+    try { localStorage.setItem("corrida-insana-recorde", recorde); } catch (e) {}
+    txt += "\n🏆 NOVO RECORDE!";
+    setTimeout(SOM.vitoria, 500);
+  } else txt += "\nRecorde: " + recorde;
+  resultado.innerText = txt;
+  atualizarMotor();
+}
+
+/* REINICIAR */
+function reiniciar() {
+  velocidade = 0;
+  pontos = 0;
+  faixa = 1;
+  nivel = 1;
+  acelerando = false;
+  freando = false;
+  jogo = true;
+  tempoSpawn = 0;
+  tempoMoeda = 0;
+  jogador.classList.remove("batido");
+  inimigos.forEach(i => i.elemento.remove());
+  inimigos = [];
+  moedas.forEach(m => m.elemento.remove());
+  moedas = [];
+  mensagem.style.display = "none";
+  posicionarCarro();
+  atualizarPainel();
+  document.querySelectorAll("#reiniciar").forEach(b => b.blur());
+}
+
+function atualizarPainel() {
+  pontosTexto.innerText = Math.floor(pontos);
+  velocidadeTexto.innerText = Math.round(velocidade);
+}
+
+function mostrarTexto(t) {
+  const d = document.createElement("div");
+  d.className = "texto-pista";
+  d.textContent = t;
+  pista.appendChild(d);
+  setTimeout(() => d.remove(), 900);
+}
+
+/* LOOP PRINCIPAL */
+function loop(tempo) {
+  requestAnimationFrame(loop);
+  atualizarMotor();
+
+  if (!jogo) {
+    ultimoTempo = tempo;
+    linhas.forEach(l => l.style.animationPlayState = "paused");
+    return;
+  }
+
+  if (!ultimoTempo) ultimoTempo = tempo;
+  posicionarCarro(); // mantém o carro alinhado mesmo se o layout mudar
+  const dt = Math.min((tempo - ultimoTempo) / 16.67, 2);
+  ultimoTempo = tempo;
+
+  if (acelerando) velocidade += 1.5 * dt;
+  if (freando) velocidade -= 2.5 * dt;
+  velocidade = Math.max(0, Math.min(350, velocidade));
+
+  // pontos proporcionais à velocidade (antes, abaixo de 100 km/h não contava nada)
+  pontos += velocidade / 100 * dt * 0.5;
+
+  // faixas da pista andam conforme a velocidade
+  linhas.forEach(l => {
+    l.style.animationPlayState = velocidade > 1 ? "running" : "paused";
+    l.style.animationDuration = Math.max(0.08, 0.25 * 150 / Math.max(velocidade, 20)) + "s";
+  });
+
+  // dificuldade sobe com a pontuação
+  const novoNivel = 1 + Math.floor(pontos / 1000);
+  if (novoNivel > nivel) { nivel = novoNivel; SOM.fase(); mostrarTexto("NÍVEL " + nivel + "!"); }
+  const intervalo = Math.max(55, 150 - (nivel - 1) * 18);
+  const maximo = Math.min(6, 3 + Math.floor((nivel - 1) / 2));
+
+  tempoSpawn += dt;
+  if (tempoSpawn >= intervalo && velocidade > 30 && inimigos.length < maximo) {
+    const f = Math.floor(Math.random() * 3);
+    criarInimigo(f);
+    // em níveis altos às vezes vêm dois carros juntos (sempre sobra uma faixa livre)
+    if (nivel >= 3 && Math.random() < 0.35 && inimigos.length < maximo) criarInimigo((f + 1 + Math.floor(Math.random() * 2)) % 3);
+    tempoSpawn = 0;
+  }
+  tempoMoeda += dt;
+  if (tempoMoeda > 200 && velocidade > 30) { criarMoeda(); tempoMoeda = 0; }
+
+  /* MOVIMENTAÇÃO DOS ADVERSÁRIOS */
+  for (let i = inimigos.length - 1; i >= 0; i--) {
+    const inimigo = inimigos[i];
+    inimigo.y += (velocidade / 4 + 3) * inimigo.ritmo * dt;
+    inimigo.elemento.style.top = inimigo.y + "px";
+
+    if (colisao(jogador, inimigo.elemento)) { fim(); break; }
+    // ultrapassagem por pouco dá bônus
+    if (!inimigo.passou && inimigo.y > jogador.offsetTop + 84) {
+      inimigo.passou = true;
+      if (Math.abs(inimigo.faixa - faixa) === 1 && velocidade > 150) { pontos += 10; mostrarTexto("RASPANDO! +10"); SOM.tom(1200, 0.06, "square", 0.03); }
+    }
+    if (inimigo.y > pista.clientHeight) {
+      inimigo.elemento.remove();
+      inimigos.splice(i, 1);
+    }
+  }
+  for (let i = moedas.length - 1; i >= 0; i--) {
+    const m = moedas[i];
+    m.y += (velocidade / 4 + 3) * dt;
+    m.elemento.style.top = m.y + "px";
+    if (colisao(jogador, m.elemento, 0)) { pontos += 50; SOM.moeda(); mostrarTexto("+50"); m.elemento.remove(); moedas.splice(i, 1); continue; }
+    if (m.y > pista.clientHeight) { m.elemento.remove(); moedas.splice(i, 1); }
+  }
+
+  atualizarPainel();
+}
+
+window.addEventListener("resize", () => {
+  posicionarCarro();
+  inimigos.forEach(i => i.elemento.style.left = posicaoFaixa(i.faixa) + "px");
+});
+
+posicionarCarro();
+atualizarPainel();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

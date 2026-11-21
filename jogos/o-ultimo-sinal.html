@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>O Último Sinal</title>
+
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #050608;
+  color: #e7e0d1;
+  font-family: Georgia, serif;
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.top {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.brand {
+  font-size: 18px;
+  letter-spacing: 3px;
+}
+
+#status {
+  font-size: 12px;
+  text-align: right;
+  line-height: 1.5;
+}
+
+#inventory {
+  position: absolute;
+  top: 62px;
+  left: 14px;
+  font-size: 12px;
+}
+
+#cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border: 1px solid white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+#prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 23%;
+  transform: translateX(-50%);
+  background: #000b;
+  padding: 10px;
+  border: 1px solid #51483c;
+  text-align: center;
+  opacity: 0;
+}
+
+#doorHint {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  transform: translateX(-50%);
+  background: #000b;
+  border: 1px solid #88765d;
+  padding: 10px;
+  opacity: 0;
+}
+
+#toast {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000d;
+  border: 1px solid #685947;
+  padding: 10px;
+  text-align: center;
+  opacity: 0;
+  max-width: 90%;
+}
+
+#controls {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  pointer-events: auto;
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(2, 46px);
+  gap: 5px;
+}
+
+.ctrl {
+  border: 1px solid #786b59;
+  background: #0c0d0fbd;
+  color: white;
+  border-radius: 8px;
+  font-size: 19px;
+  touch-action: none;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions .ctrl {
+  padding: 10px;
+  font-size: 13px;
+}
+
+#panel {
+  position: absolute;
+  inset: 0;
+  background: #000c;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  pointer-events: auto;
+}
+
+.paper {
+  width: min(560px, 100%);
+  max-height: 85%;
+  overflow: auto;
+  background: #d4c8a9;
+  color: #211e19;
+  padding: 25px;
+}
+
+.paper h2 {
+  margin-bottom: 14px;
+  font-size: 25px;
+  font-weight: normal;
+}
+
+.paper p {
+  font-size: 17px;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.paper button {
+  background: #24211d;
+  color: white;
+  border: 0;
+  padding: 11px 18px;
+  margin-top: 10px;
+}
+
+#start {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, #30302c, #050608);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.startbox {
+  max-width: 620px;
+}
+
+.startbox h1 {
+  font-size: clamp(35px, 8vw, 66px);
+  font-weight: normal;
+  letter-spacing: 3px;
+  margin: 20px 0;
+}
+
+.startbox p {
+  color: #c2b9a8;
+  line-height: 1.7;
+  margin: 12px 0;
+}
+
+.startbox button {
+  margin-top: 20px;
+  background: #713b35;
+  border: 1px solid #bd8171;
+  color: white;
+  padding: 15px 28px;
+  font: 16px Georgia;
+}
+
+@media (min-width: 800px) {
+  .pad {
+    grid-template-columns: repeat(3, 54px);
+    grid-template-rows: repeat(2, 50px);
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div id="game">
+
+<canvas id="view"></canvas>
+
+<div id="hud">
+
+  <div class="top">
+    <div class="brand">O ÚLTIMO SINAL</div>
+    <div id="status">
+      HOSPITAL SANTA HELENA<br>
+      23:47 — NOITE
+    </div>
+  </div>
+
+  <div id="inventory">ITENS: nenhum</div>
+  <div id="cross"></div>
+
+  <div id="doorHint">
+    PORTA — INVESTIGAR PARA ABRIR
+  </div>
+
+  <div id="prompt"></div>
+  <div id="toast"></div>
+
+  <div id="controls">
+
+    <div class="pad">
+      <span></span>
+      <button class="ctrl" data-move="forward">▲</button>
+      <span></span>
+
+      <button class="ctrl" data-move="left">◀</button>
+      <button class="ctrl" data-move="back">▼</button>
+      <button class="ctrl" data-move="right">▶</button>
+    </div>
+
+    <div class="actions">
+      <button class="ctrl" id="inspect">INVESTIGAR</button>
+      <button class="ctrl" id="journal">PISTAS</button>
+    </div>
+
+  </div>
+</div>
+
+<div id="panel">
+  <div class="paper">
+    <h2 id="paperTitle"></h2>
+    <p id="paperText"></p>
+    <button id="close">FECHAR</button>
+  </div>
+</div>
+
+<div id="start">
+  <div class="startbox">
+
+    <div>UM MISTÉRIO EM TRÊS ATOS</div>
+
+    <h1>O ÚLTIMO SINAL</h1>
+
+    <p>
+      Uma carta anônima levou você ao Hospital Santa Helena.
+      Sua irmã desapareceu aqui há onze anos.
+      Esta noite, alguém deixou a porta aberta.
+    </p>
+
+    <p>
+      Use WASD ou as setas para andar.
+      No celular, utilize os botões na tela.
+    </p>
+
+    <button id="begin">ENTRAR NO HOSPITAL</button>
+
+  </div>
+</div>
+
+</div>
+
+
+<script>
+'use strict';
+/* ======================================================
+   O ÚLTIMO SINAL — lógica do jogo
+   Exploração em primeira pessoa (raycasting) em 3 atos.
+   ====================================================== */
+const cv = document.getElementById('view');
+const ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+
+/* ---------- MAPA DO HOSPITAL ----------
+   # parede   . chão
+   A porta da Ala B (crachá)     E porta da enfermaria (livre)
+   B porta do arquivo (energia)  C porta da sala de rádio (código) */
+const ORIGINAL = [
+  "####################",
+  "#....#......#......#",
+  "#....#......#......#",
+  "#....A......B......#",
+  "#....#......#......#",
+  "#....#......####C###",
+  "######......#......#",
+  "#....#......#......#",
+  "#....E......#......#",
+  "#....#......#......#",
+  "####################"
+];
+let MAP = [];
+
+const DOORS = {
+  A: { nome: 'PORTA — ALA B', req: 'cracha',
+       fail: 'Trancada. Um leitor de crachá pisca em vermelho.',
+       ok: 'Você passa o crachá do Dr. Arantes. A trava se solta com um estalo seco.' },
+  E: { nome: 'PORTA — ENFERMARIA', req: null,
+       ok: 'A porta range e se abre devagar.' },
+  B: { nome: 'PORTA — ARQUIVO', req: 'energia',
+       fail: 'Fechadura eletrônica apagada. Esta ala está sem energia.',
+       ok: 'Com a energia de volta, a fechadura do arquivo destrava.' },
+  C: { nome: 'PORTA — SALA DE RÁDIO', req: 'codigo',
+       fail: 'Um teclado numérico de quatro dígitos. Você não sabe o código.',
+       ok: 'Você digita 2-3-4-7. Um bip longo. A porta se abre.' }
+};
+
+/* ---------- OBJETOS PARA INVESTIGAR ---------- */
+const OBJS = [
+  { id: 'carta', x: 2.5, y: 4.4, spr: 'paper', titulo: 'A carta anônima',
+    texto: 'Você relê a carta que trouxe até aqui:\n\n"Clara não foi embora. Ela ainda está transmitindo. Hospital Santa Helena, 23:47. A porta estará aberta."\n\nA letra é tremida. Parece a letra da sua irmã.',
+    pista: true },
+  { id: 'mesa', x: 2.5, y: 1.4, spr: 'box', titulo: 'Mesa da recepção',
+    texto: 'Gavetas reviradas, fichas amareladas. No fundo de uma delas, um crachá:\n\nDR. H. ARANTES — PSIQUIATRIA — ACESSO ALA B\n\nVocê guarda o crachá.',
+    da: 'cracha', item: 'Crachá do Dr. Arantes' },
+  { id: 'quadro', x: 4.4, y: 1.5, spr: 'paper', titulo: 'Quadro de avisos',
+    texto: 'Um aviso desbotado, de 2013:\n\n"ATENÇÃO: por ordem da diretoria, a energia da Ala B e do Arquivo será DESLIGADA. Fusíveis recolhidos à enfermaria. — Dr. H. Arantes"\n\nO ano em que Clara desapareceu.',
+    pista: true },
+  { id: 'prontuario', x: 8.5, y: 2.5, spr: 'paper', titulo: 'Prontuário no chão',
+    texto: 'PACIENTE 23 — CLARA M., 17 ANOS\nQueixa: "ouve vozes no rádio".\n\nAnotação do Dr. Arantes: "A paciente insiste que o rádio da sala 4 capta mensagens. Iniciar sessões noturnas de escuta. Horário: 23h47."',
+    pista: true },
+  { id: 'cadeira', x: 10.3, y: 5.5, spr: 'chair', titulo: 'Cadeira de rodas',
+    texto: 'Uma cadeira de rodas virada para a parede. As rodas ainda giram, devagar, como se alguém tivesse acabado de sair dela.' },
+  { id: 'bilhete', x: 3.5, y: 7.5, spr: 'paper', titulo: 'Bilhete da enfermeira',
+    texto: '"Não aguento mais os plantões da noite. Às 23:47 o rádio da sala 4 liga sozinho, mesmo sem energia. Hoje ouvi meu nome nele.\nGuardei os fusíveis no armário, como o doutor mandou. Não volto mais."\n— Enf. Rosa',
+    pista: true },
+  { id: 'armario', x: 1.5, y: 8.5, spr: 'box', titulo: 'Armário de remédios',
+    texto: 'Frascos vazios e seringas velhas. Atrás deles, uma caixa de metal com um fusível grande, ainda embrulhado.\n\nVocê pega o fusível.',
+    da: 'fusivel', item: 'Fusível' },
+  { id: 'forca', x: 11.45, y: 7.5, spr: 'panel', titulo: 'Quadro de força',
+    req: 'fusivel', falta: 'Um quadro de força com um encaixe vazio. Falta um fusível.',
+    texto: 'Você encaixa o fusível e puxa a alavanca.\n\nUm estalo. As lâmpadas do corredor piscam, zumbem... e acendem. Em algum lugar, uma fechadura eletrônica apita.',
+    da: 'energia', item: null },
+  { id: 'diario', x: 14.5, y: 1.5, spr: 'paper', titulo: 'Diário de Clara',
+    texto: '"Dia 40. O doutor diz que é tudo da minha cabeça. Mas o rádio responde quando eu falo. Tem uma moça do outro lado que diz que é eu, no futuro.\nSe alguém ler isto: eu não fugi. Eu fui ouvir o último sinal."',
+    pista: true },
+  { id: 'ficha', x: 17.5, y: 2.5, spr: 'box', titulo: 'Arquivo — ficha 23',
+    texto: 'A pasta de Clara está quase vazia. Só uma folha, com a letra do Dr. Arantes:\n\n"Sala de rádio lacrada. Código do teclado: a hora das sessões."\n\nA hora das sessões... 23h47. O código só pode ser 2347.',
+    da: 'codigo', item: 'Código: 2347', pista: true },
+  { id: 'gravador', x: 13.6, y: 8.6, spr: 'box', titulo: 'Gravador de fita',
+    texto: 'Você aperta PLAY. Chiado. Depois, a voz do Dr. Arantes:\n\n"Sessão 12. A paciente diz que o sinal fica mais forte a cada noite. Hoje ela entrou na sala e... não saiu. A sala estava vazia. Só o rádio, ligado."',
+    pista: true },
+  { id: 'radio', x: 16.5, y: 8.6, spr: 'radio', titulo: 'O rádio',
+    final: true }
+];
+
+const FINAL_TEXTO =
+'O rádio liga sozinho. O ponteiro desliza até uma frequência que não existe.\n\n' +
+'Chiado... e então uma voz que você conhece desde sempre:\n\n' +
+'"Você veio. Eu sabia que viria. Eu não estou perdida — eu estou entre as estações. Toda noite, às 23:47, eu consigo falar um pouco. Escrevi aquela carta pelo rádio, com as mãos da enfermeira, com os sonhos do doutor... e agora com você aqui."\n\n' +
+'"Não tenha medo. Grave minha voz. Conte para todo mundo que eu não fugi."\n\n' +
+'Você aperta o botão de gravar do seu celular. O relógio, finalmente, marca 23:48.\n\n' +
+'— FIM —';
+
+/* ---------- ESTADO ---------- */
+let px, py, ang, inv, flags, pistas, ato, rodando = false, painelAberto = false, fantasma;
+function novoJogo() {
+  MAP = ORIGINAL.map(r => r.split(''));
+  px = 2.5; py = 3.2; ang = -Math.PI / 2;
+  inv = new Set(); flags = {}; pistas = []; ato = 1;
+  painelAberto = false; rodando = false;
+  fantasma = { x: 8.5, y: 8.2, ativo: false, visto: false };
+  OBJS.forEach(o => o.usado = false);
+  atualizaHud();
+}
+
+/* ---------- TEXTURAS PROCEDURAIS ---------- */
+function tex(desenho) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  desenho(g);
+  return c;
+}
+function ruido(g, n, cor, tam) {
+  g.fillStyle = cor;
+  for (let i = 0; i < n; i++) g.fillRect(Math.random() * 64 | 0, Math.random() * 64 | 0, tam || 1, tam || 1);
+}
+function texPorta(luz) {
+  return tex(g => {
+    g.fillStyle = '#2b2622'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#6b5a48'; g.fillRect(8, 4, 48, 60);
+    g.fillStyle = '#5a4a3a'; g.fillRect(12, 32, 40, 28);
+    g.fillStyle = '#1b2228'; g.fillRect(20, 10, 24, 16);
+    g.fillStyle = 'rgba(160,200,220,.15)'; g.fillRect(21, 11, 10, 14);
+    g.fillStyle = '#c9b48a'; g.fillRect(48, 36, 4, 6);
+    if (luz) { g.fillStyle = luz; g.fillRect(48, 28, 4, 4); }
+    ruido(g, 120, 'rgba(0,0,0,.3)', 2);
+  });
+}
+const TEX = {
+  parede: tex(g => {
+    g.fillStyle = '#7d877d'; g.fillRect(0, 0, 64, 38);
+    g.strokeStyle = '#5c655d';
+    for (let y = 0; y < 38; y += 9) { g.beginPath(); g.moveTo(0, y + .5); g.lineTo(64, y + .5); g.stroke(); }
+    for (let x = 0; x < 64; x += 16) { g.beginPath(); g.moveTo(x + .5, 0); g.lineTo(x + .5, 38); g.stroke(); }
+    g.fillStyle = '#3c4b41'; g.fillRect(0, 38, 64, 26);
+    g.fillStyle = '#2a332d'; g.fillRect(0, 38, 64, 3);
+    ruido(g, 160, 'rgba(0,0,0,.25)', 2);
+    ruido(g, 60, 'rgba(255,255,255,.06)', 1);
+    g.fillStyle = 'rgba(60,40,20,.35)';
+    for (let i = 0; i < 4; i++) g.fillRect(Math.random() * 60, 20 + Math.random() * 18, 2, 10 + Math.random() * 20);
+  }),
+  portaLivre: texPorta(null),
+  portaFechada: texPorta('#ff2a2a'),
+  portaAberta: texPorta('#36ff6a')
+};
+
+const SPR = {
+  paper: tex(g => {
+    g.fillStyle = 'rgba(255,240,190,.12)'; g.beginPath(); g.arc(32, 52, 14, 0, 7); g.fill();
+    g.fillStyle = '#d8ccab'; g.fillRect(22, 44, 20, 14);
+    g.fillStyle = '#8a7f66'; for (let i = 0; i < 4; i++) g.fillRect(25, 47 + i * 3, 14, 1);
+  }),
+  box: tex(g => {
+    g.fillStyle = '#4a3b2c'; g.fillRect(10, 30, 44, 34);
+    g.fillStyle = '#3a2d21'; g.fillRect(10, 30, 44, 4);
+    g.fillStyle = '#2a2018'; g.fillRect(14, 40, 36, 2); g.fillRect(14, 52, 36, 2);
+    g.fillStyle = '#b8a070'; g.fillRect(30, 44, 4, 3); g.fillRect(30, 56, 4, 3);
+    g.fillStyle = 'rgba(255,240,190,.5)'; g.fillRect(20, 26, 14, 4);
+  }),
+  chair: tex(g => {
+    g.strokeStyle = '#8f9aa0'; g.lineWidth = 2;
+    g.beginPath(); g.arc(22, 54, 9, 0, 7); g.stroke();
+    g.beginPath(); g.arc(44, 54, 9, 0, 7); g.stroke();
+    g.fillStyle = '#3c4a5a'; g.fillRect(18, 36, 28, 8); g.fillRect(40, 16, 6, 22);
+    g.fillStyle = '#8f9aa0'; g.fillRect(16, 44, 32, 2);
+  }),
+  panel: tex(g => {
+    g.fillStyle = '#5c6066'; g.fillRect(16, 14, 32, 40);
+    g.fillStyle = '#2c2f33'; g.fillRect(20, 18, 24, 32);
+    g.fillStyle = '#ffd23a'; g.fillRect(22, 20, 20, 4);
+    g.fillStyle = '#111'; g.fillRect(28, 30, 8, 14);
+  }),
+  radio: tex(g => {
+    g.fillStyle = 'rgba(120,255,160,.12)'; g.beginPath(); g.arc(32, 42, 24, 0, 7); g.fill();
+    g.fillStyle = '#5a3a24'; g.fillRect(12, 30, 40, 30);
+    g.fillStyle = '#c9b48a'; g.fillRect(16, 34, 20, 14);
+    g.fillStyle = '#2b1c10'; for (let i = 0; i < 5; i++) g.fillRect(17, 36 + i * 2.6, 18, 1);
+    g.fillStyle = '#d9c070'; g.beginPath(); g.arc(44, 40, 4, 0, 7); g.fill();
+    g.beginPath(); g.arc(44, 52, 3, 0, 7); g.fill();
+    g.fillStyle = '#6cff9a'; g.fillRect(18, 52, 16, 3);
+    g.strokeStyle = '#999'; g.beginPath(); g.moveTo(46, 30); g.lineTo(56, 6); g.stroke();
+  }),
+  ghost: tex(g => {
+    const gr = g.createLinearGradient(0, 0, 0, 64);
+    gr.addColorStop(0, 'rgba(10,10,12,.95)'); gr.addColorStop(1, 'rgba(10,10,12,0)');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(32, 14, 7, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(22, 22); g.lineTo(42, 22); g.lineTo(46, 64); g.lineTo(18, 64); g.fill();
+    g.fillStyle = 'rgba(220,230,255,.8)'; g.fillRect(29, 13, 2, 2); g.fillRect(34, 13, 2, 2);
+  })
+};
+
+/* ---------- ENTRADA ---------- */
+const teclas = {};
+const mover = { forward: false, back: false, left: false, right: false };
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  teclas[k] = true;
+  if (k.startsWith('arrow') || k === ' ') e.preventDefault();
+  if (painelAberto) {
+    if (k === 'escape' || k === 'e' || k === 'enter' || k === ' ') fecharPainel();
+    return;
+  }
+  if (!rodando) return;
+  if (k === 'e' || k === ' ' || k === 'enter') investigar();
+  if (k === 'j' || k === 'tab') { e.preventDefault(); abrirPistas(); }
+});
+addEventListener('keyup', e => { teclas[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for (const k in teclas) teclas[k] = false; for (const k in mover) mover[k] = false; });
+
+document.querySelectorAll('[data-move]').forEach(b => {
+  const d = b.dataset.move;
+  const on = e => { e.preventDefault(); mover[d] = true; };
+  const off = () => { mover[d] = false; };
+  b.addEventListener('pointerdown', on);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, off));
+});
+$('inspect').addEventListener('click', () => { if (rodando && !painelAberto) investigar(); });
+$('journal').addEventListener('click', () => { if (rodando && !painelAberto) abrirPistas(); });
+$('close').addEventListener('click', fecharPainel);
+
+// arrastar na tela para olhar para os lados
+let arrasto = null;
+cv.addEventListener('pointerdown', e => { arrasto = e.clientX; try { cv.setPointerCapture(e.pointerId); } catch (err) {} });
+cv.addEventListener('pointermove', e => {
+  if (arrasto === null || !rodando || painelAberto) return;
+  ang += (e.clientX - arrasto) * 0.006; arrasto = e.clientX;
+});
+cv.addEventListener('pointerup', () => arrasto = null);
+cv.addEventListener('pointercancel', () => arrasto = null);
+
+/* ---------- SOM (zumbido e chiado de rádio) ---------- */
+let audio = null;
+function iniciarAudio() {
+  try {
+    const A = new (window.AudioContext || window.webkitAudioContext)();
+    const zum = A.createOscillator(); zum.type = 'sawtooth'; zum.frequency.value = 50;
+    const fz = A.createBiquadFilter(); fz.type = 'lowpass'; fz.frequency.value = 120;
+    const gz = A.createGain(); gz.gain.value = 0.015;
+    zum.connect(fz); fz.connect(gz); gz.connect(A.destination); zum.start();
+    const buf = A.createBuffer(1, A.sampleRate * 2, A.sampleRate);
+    const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const ch = A.createBufferSource(); ch.buffer = buf; ch.loop = true;
+    const fc = A.createBiquadFilter(); fc.type = 'bandpass'; fc.frequency.value = 1800;
+    const gc = A.createGain(); gc.gain.value = 0;
+    ch.connect(fc); fc.connect(gc); gc.connect(A.destination); ch.start();
+    audio = { A, gz, gc };
+  } catch (e) { audio = null; }
+}
+function bip(freq, dur) {
+  if (!audio) return;
+  try {
+    const o = audio.A.createOscillator(), g = audio.A.createGain();
+    o.frequency.value = freq; g.gain.value = 0.05;
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.A.currentTime + dur);
+    o.connect(g); g.connect(audio.A.destination); o.start(); o.stop(audio.A.currentTime + dur);
+  } catch (e) {}
+}
+
+/* ---------- INTERFACE ---------- */
+let toastT = 0;
+function toast(msg, seg) { $('toast').textContent = msg; $('toast').style.opacity = 1; toastT = seg || 3.2; }
+function atualizaHud() {
+  const atos = ['', 'ATO I — A RECEPÇÃO', 'ATO II — A ALA ESCURA', 'ATO III — O SINAL'];
+  $('status').innerHTML = 'HOSPITAL SANTA HELENA<br>23:47 — ' + atos[ato];
+  const nomes = OBJS.filter(o => o.usado && o.item).map(o => o.item);
+  if (inv.has('energia')) nomes.push('Energia ligada');
+  $('inventory').textContent = 'ITENS: ' + (nomes.length ? nomes.join(' · ') : 'nenhum');
+}
+function abrirPainel(titulo, texto, final) {
+  painelAberto = true;
+  $('paperTitle').textContent = titulo;
+  $('paperText').textContent = texto;
+  $('close').textContent = final ? 'JOGAR DE NOVO' : 'FECHAR';
+  $('close').dataset.final = final ? '1' : '';
+  $('panel').style.display = 'flex';
+  $('prompt').style.opacity = 0; $('doorHint').style.opacity = 0;
+}
+function fecharPainel() {
+  const final = $('close').dataset.final;
+  painelAberto = false;
+  $('panel').style.display = 'none';
+  if (final) { $('close').dataset.final = ''; novoJogo(); $('start').style.display = 'flex'; }
+}
+function abrirPistas() {
+  if (!pistas.length) { abrirPainel('Pistas', 'Você ainda não encontrou nenhuma pista.\n\nProcure papéis, gavetas e objetos estranhos. Chegue perto e toque em INVESTIGAR.'); return; }
+  abrirPainel('Pistas (' + pistas.length + ')', pistas.map((p, i) => (i + 1) + '. ' + p.titulo.toUpperCase() + '\n' + p.texto).join('\n\n— — —\n\n'));
+}
+
+/* ---------- MUNDO ---------- */
+const solido = (x, y) => { const c = (MAP[y | 0] || [])[x | 0]; return c !== '.'; };
+function alvo() {
+  // objeto mais próximo à frente
+  let melhor = null, md = 1.8;
+  for (const o of OBJS) {
+    const dx = o.x - px, dy = o.y - py, d = Math.hypot(dx, dy);
+    if (d > md) continue;
+    let da = Math.atan2(dy, dx) - ang;
+    da = Math.atan2(Math.sin(da), Math.cos(da));
+    if (Math.abs(da) < 0.6) { melhor = { tipo: 'obj', o }; md = d; }
+  }
+  if (melhor) return melhor;
+  // porta à frente
+  for (let s = 0.3; s <= 1.3; s += 0.1) {
+    const cx = (px + Math.cos(ang) * s) | 0, cy = (py + Math.sin(ang) * s) | 0;
+    const c = MAP[cy][cx];
+    if (DOORS[c]) return { tipo: 'porta', c, cx, cy };
+    if (c === '#') break;
+  }
+  return null;
+}
+function investigar() {
+  const a = alvo();
+  if (!a) { toast('Não há nada aqui para investigar.'); return; }
+  if (a.tipo === 'porta') {
+    const d = DOORS[a.c];
+    if (d.req && !inv.has(d.req)) { toast(d.fail); bip(140, 0.25); return; }
+    MAP[a.cy][a.cx] = '.';
+    toast(d.ok, 3.6); bip(880, 0.15);
+    if (a.c === 'A' && ato < 2) { ato = 2; setTimeout(() => toast('ATO II — A ALA ESCURA. Encontre um jeito de religar a energia.', 4), 3800); }
+    if (a.c === 'C' && ato < 3) { ato = 3; setTimeout(() => toast('ATO III — O SINAL. Você ouve um chiado.', 3.5), 3800); }
+    atualizaHud();
+    return;
+  }
+  const o = a.o;
+  if (o.final) {
+    rodando = false;
+    abrirPainel('O último sinal', FINAL_TEXTO, true);
+    return;
+  }
+  if (o.req && !inv.has(o.req)) { abrirPainel(o.titulo, o.falta); return; }
+  if (!o.usado) {
+    o.usado = true;
+    if (o.da) inv.add(o.da);
+    if (o.pista) pistas.push({ titulo: o.titulo, texto: o.texto });
+    if (o.da === 'energia') { fantasma.ativo = true; flags.luz = true; piscar = 0; bip(220, 0.6); }
+    if (o.item) toast('Item obtido: ' + o.item);
+    else if (o.pista) toast('Nova pista anotada (veja em PISTAS).');
+    atualizaHud();
+  }
+  abrirPainel(o.titulo, o.texto);
+}
+
+/* ---------- LOOP ---------- */
+let ultimo = 0, piscar = 1, tempo = 0;
+function loop(t) {
+  const dt = Math.min(0.05, (t - ultimo) / 1000 || 0); ultimo = t; tempo += dt;
+  if (rodando && !painelAberto) atualizar(dt);
+  desenhar();
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
+  requestAnimationFrame(loop);
+}
+function atualizar(dt) {
+  const frente = teclas.w || teclas.arrowup || mover.forward;
+  const tras = teclas.s || teclas.arrowdown || mover.back;
+  const esq = teclas.a || teclas.arrowleft || mover.left;
+  const dir = teclas.d || teclas.arrowright || mover.right;
+  if (esq) ang -= 2.3 * dt;
+  if (dir) ang += 2.3 * dt;
+  const v = (frente ? 1 : 0) - (tras ? 0.7 : 0);
+  if (v) {
+    const nx = px + Math.cos(ang) * v * 2.3 * dt, ny = py + Math.sin(ang) * v * 2.3 * dt, r = 0.22;
+    if (!solido(nx + Math.sign(nx - px) * r, py)) px = nx;
+    if (!solido(px, ny + Math.sign(ny - py) * r)) py = ny;
+  }
+  // dicas de interação
+  const a = alvo();
+  if (a && a.tipo === 'obj') {
+    $('prompt').textContent = (a.o.final ? 'O RÁDIO ESTÁ LIGADO — ' : '') + 'INVESTIGAR: ' + a.o.titulo.toUpperCase();
+    $('prompt').style.opacity = 1; $('doorHint').style.opacity = 0;
+  } else if (a && a.tipo === 'porta') {
+    const d = DOORS[a.c];
+    $('doorHint').textContent = d.nome + (d.req && !inv.has(d.req) ? ' — TRANCADA' : ' — INVESTIGAR PARA ABRIR');
+    $('doorHint').style.opacity = 1; $('prompt').style.opacity = 0;
+  } else { $('prompt').style.opacity = 0; $('doorHint').style.opacity = 0; }
+  // vulto no corredor depois que a luz volta
+  if (fantasma.ativo && !fantasma.visto && Math.hypot(fantasma.x - px, fantasma.y - py) < 2.6) {
+    fantasma.visto = true; fantasma.ativo = false; piscar = 0;
+    toast('Você tem certeza de que viu alguém ali.', 3); bip(90, 0.8);
+  }
+  // chiado do rádio fica mais forte perto da sala
+  if (audio) {
+    const d = Math.hypot(16.5 - px, 8.6 - py);
+    audio.gc.gain.value = ato >= 2 ? Math.max(0, 0.06 - d * 0.006) : 0;
+  }
+}
+
+/* ---------- RENDERIZAÇÃO (raycasting) ---------- */
+const zbuf = [];
+function redimensionar() {
+  const esc = innerWidth > 900 ? 2.5 : 2;
+  cv.width = Math.max(160, Math.floor(cv.clientWidth / esc));
+  cv.height = Math.max(100, Math.floor(cv.clientHeight / esc));
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener('resize', redimensionar);
+
+function desenhar() {
+  const w = cv.width, h = cv.height;
+  piscar = Math.min(1, piscar + 0.02);
+  const tremor = Math.random() < 0.02 ? 0.5 : 1;
+  const luz = (flags.luz ? 1 : 0.75) * tremor * piscar;
+
+  const teto = ctx.createLinearGradient(0, 0, 0, h / 2);
+  teto.addColorStop(0, '#050505'); teto.addColorStop(1, flags.luz ? '#2a2c28' : '#141513');
+  ctx.fillStyle = teto; ctx.fillRect(0, 0, w, h / 2);
+  const chao = ctx.createLinearGradient(0, h / 2, 0, h);
+  chao.addColorStop(0, '#0b0c0b'); chao.addColorStop(1, flags.luz ? '#3d3a33' : '#24221e');
+  ctx.fillStyle = chao; ctx.fillRect(0, h / 2, w, h / 2);
+
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  const plx = -dy * 0.66, ply = dx * 0.66;
+  const alcance = flags.luz ? 9 : 6;
+
+  for (let x = 0; x < w; x++) {
+    const cam = 2 * x / w - 1;
+    const rx = dx + plx * cam, ry = dy + ply * cam;
+    let mx = px | 0, my = py | 0;
+    const ddx = Math.abs(1 / rx), ddy = Math.abs(1 / ry);
+    let sx, sy, sdx, sdy;
+    if (rx < 0) { sx = -1; sdx = (px - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - px) * ddx; }
+    if (ry < 0) { sy = -1; sdy = (py - my) * ddy; } else { sy = 1; sdy = (my + 1 - py) * ddy; }
+    let lado = 0, c = '#', passos = 0;
+    while (passos++ < 64) {
+      if (sdx < sdy) { sdx += ddx; mx += sx; lado = 0; } else { sdy += ddy; my += sy; lado = 1; }
+      c = (MAP[my] || [])[mx];
+      if (c === undefined) { c = '#'; break; }
+      if (c !== '.') break;
+    }
+    const dist = Math.max(0.05, lado === 0 ? (mx - px + (1 - sx) / 2) / rx : (my - py + (1 - sy) / 2) / ry);
+    zbuf[x] = dist;
+    const altura = h / dist;
+    const topo = (h - altura) / 2;
+    let wx = lado === 0 ? py + dist * ry : px + dist * rx;
+    wx -= Math.floor(wx);
+    let tx = (wx * 64) | 0;
+    if ((lado === 0 && rx > 0) || (lado === 1 && ry < 0)) tx = 63 - tx;
+    let t = TEX.parede;
+    if (DOORS[c]) {
+      const d = DOORS[c];
+      t = !d.req ? TEX.portaLivre : (inv.has(d.req) ? TEX.portaAberta : TEX.portaFechada);
+    }
+    ctx.drawImage(t, tx, 0, 1, 64, x, topo, 1, altura);
+    // sombra pela distância + lanterna (mais claro no centro)
+    const escuro = Math.min(0.96, dist / alcance + Math.abs(cam) * 0.35 + (lado ? 0.12 : 0) + (1 - luz) * 0.4);
+    ctx.fillStyle = 'rgba(0,0,0,' + escuro.toFixed(3) + ')';
+    ctx.fillRect(x, topo, 1, altura);
+  }
+
+  // objetos (sprites)
+  const lista = OBJS.map(o => ({ x: o.x, y: o.y, s: SPR[o.spr], brilho: !o.usado && !o.final }));
+  if (fantasma.ativo) lista.push({ x: fantasma.x, y: fantasma.y, s: SPR.ghost });
+  lista.forEach(s => s.d = (s.x - px) ** 2 + (s.y - py) ** 2);
+  lista.sort((a, b) => b.d - a.d);
+  const invDet = 1 / (plx * dy - dx * ply);
+  for (const s of lista) {
+    const sx = s.x - px, sy = s.y - py;
+    const tX = invDet * (dy * sx - dx * sy);
+    const tY = invDet * (-ply * sx + plx * sy);
+    if (tY <= 0.1) continue;
+    const scx = (w / 2) * (1 + tX / tY);
+    const tam = Math.abs(h / tY);
+    const x0 = Math.floor(scx - tam / 2), x1 = Math.floor(scx + tam / 2);
+    const y0 = h / 2 - tam / 2;
+    const sombra = Math.min(0.9, Math.sqrt(s.d) / alcance);
+    ctx.globalAlpha = 1 - sombra * 0.85;
+    for (let x = Math.max(0, x0); x < Math.min(w, x1); x++) {
+      if (tY >= zbuf[x]) continue;
+      const col = ((x - x0) / tam * 64) | 0;
+      ctx.drawImage(s.s, col, 0, 1, 64, x, y0, 1, tam);
+    }
+    ctx.globalAlpha = 1;
+    // brilho fraco em objetos ainda não investigados
+    if (s.brilho && Math.sin(tempo * 3 + s.x) > 0.3) {
+      const cx = Math.floor(scx);
+      if (cx > 0 && cx < w && tY < zbuf[cx]) {
+        ctx.fillStyle = 'rgba(255,230,160,.7)';
+        ctx.fillRect(cx, Math.floor(y0 + tam * 0.4), 1, 1);
+      }
+    }
+  }
+
+  // vinheta da lanterna
+  const vg = ctx.createRadialGradient(w / 2, h / 2, h * 0.15, w / 2, h / 2, Math.max(w, h) * 0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,' + (flags.luz ? 0.6 : 0.85) + ')');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
+  // granulado
+  ctx.fillStyle = 'rgba(255,255,255,.04)';
+  for (let i = 0; i < 60; i++) ctx.fillRect(Math.random() * w | 0, Math.random() * h | 0, 1, 1);
+}
+
+/* ---------- INÍCIO ---------- */
+$('begin').addEventListener('click', () => {
+  $('start').style.display = 'none';
+  rodando = true;
+  if (!audio) iniciarAudio(); else if (audio.A.state === 'suspended') audio.A.resume();
+  toast('ATO I — A RECEPÇÃO. Procure uma forma de entrar na Ala B.', 4);
+  redimensionar();
+});
+
+novoJogo();
+redimensionar();
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Noite Sem Fim — Sobrevivência 3D</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0b0b14;font-family:system-ui,Segoe UI,Roboto,sans-serif;touch-action:none;color:#fff}
+  canvas{display:block}
+  #xp{position:fixed;top:0;left:0;right:0;height:14px;background:#0009;pointer-events:none}
+  #xp i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4cc9f0,#7209b7)}
+  #xp span{position:absolute;right:8px;top:0;font-size:11px;font-weight:900;line-height:14px}
+  #hud{position:fixed;top:20px;left:0;right:0;display:flex;justify-content:space-between;padding:0 12px;font-weight:900;text-shadow:0 2px 3px #000;pointer-events:none;align-items:flex-start}
+  #timer{font-size:24px;text-align:center}
+  #timer small{display:block;font-size:12px;opacity:.8}
+  #weapons{position:fixed;top:72px;left:10px;display:flex;flex-direction:column;gap:4px;pointer-events:none}
+  #weapons div{background:#0008;border-radius:8px;padding:3px 8px;font-size:12px;font-weight:800}
+  #pause{position:fixed;top:20px;right:10px;width:40px;height:40px;border-radius:10px;border:0;background:#0008;color:#fff;font-size:18px;cursor:pointer;display:none}
+  #msg{position:fixed;top:26%;width:100%;text-align:center;font-size:clamp(24px,7vw,46px);font-weight:900;text-shadow:0 3px 8px #000;pointer-events:none;opacity:0;transition:opacity .3s;color:#ffd166}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0b0b14e6;text-align:center;padding:20px;z-index:5}
+  .screen h1{font-size:clamp(30px,8vw,54px);color:#c77dff;text-shadow:0 4px 0 #3c096c}
+  .screen h2{font-size:clamp(24px,6vw,36px);color:#ffd166}
+  .screen p{max-width:480px;line-height:1.45;opacity:.9}
+  #levels{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  #levels button,.big{font:inherit;font-weight:900;border:0;border-radius:12px;padding:12px 0;width:56px;background:#c77dff;color:#240046;cursor:pointer;box-shadow:0 4px 0 #5a189a}
+  #levels button:disabled{background:#333;color:#777;box-shadow:0 4px 0 #111}
+  .big{width:auto;padding:12px 26px}
+  #cards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:760px}
+  .card{width:min(92vw,220px);background:linear-gradient(#240046,#10002b);border:2px solid #c77dff;border-radius:14px;padding:14px;cursor:pointer;text-align:left;transition:transform .1s}
+  .card:hover{transform:scale(1.04);border-color:#ffd166}
+  .card .ic{font-size:30px}.card b{display:block;font-size:16px;margin:4px 0;color:#ffd166}.card small{opacity:.85;font-size:13px;line-height:1.3;display:block}
+  .card .lv{float:right;font-size:12px;font-weight:900;color:#4cc9f0}
+  .hidden{display:none!important}
+  .joy{position:fixed;width:130px;height:130px;border-radius:50%;background:#ffffff1a;border:2px solid #ffffff44;pointer-events:none;display:none;transform:translate(-50%,-50%)}
+  .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;border-radius:50%;background:#ffffff88;transform:translate(-50%,-50%)}
+  #bossbar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);width:min(80vw,420px);text-align:center;font-weight:900;font-size:13px;text-shadow:0 2px 2px #000}
+  #bossbar .b{height:12px;background:#0009;border-radius:6px;overflow:hidden;margin-top:3px;border:1px solid #fff5}
+  #bossbar i{display:block;height:100%;background:linear-gradient(90deg,#d00000,#ff5400);width:100%}
+</style>
+</head>
+<body>
+<div id="xp"><i></i><span id="xpLvl">Nv 1</span></div>
+<div id="hud"><div id="hStage">Fase 1</div><div id="timer">00:00<small>até o chefão</small></div><div id="hKills" style="margin-right:46px">💀 0</div></div>
+<div id="weapons"></div>
+<button id="pause">⏸</button>
+<div id="msg"></div>
+<div id="bossbar" class="hidden"><div id="bossName">CHEFÃO</div><div class="b"><i></i></div></div>
+<div class="joy" id="joy"><div class="knob"></div></div>
+<div id="menu" class="screen">
+  <h1>Noite Sem Fim</h1>
+  <p>Sobreviva às hordas! Suas armas atacam sozinhas — você só precisa se mover (WASD/setas, ou arraste o dedo em qualquer lugar da tela). Pegue os cristais para subir de nível e escolher melhorias. Quando o tempo acabar, o chefão aparece: derrote-o para passar de fase.</p>
+  <div id="levels"></div>
+</div>
+<div id="levelup" class="screen hidden"><h2>⬆ Subiu de nível! Escolha:</h2><div id="cards"></div></div>
+<div id="pauseScr" class="screen hidden"><h2>Pausado</h2><button class="big" id="resume">Continuar</button><button class="big" id="quit" style="background:#888;box-shadow:0 4px 0 #444">Sair para o menu</button></div>
+<div id="over" class="screen hidden">
+  <h1 id="oTitle"></h1><p id="oText"></p>
+  <button class="big" id="oBtn"></button>
+  <button class="big" id="oMenu" style="background:#888;box-shadow:0 4px 0 #444">Menu</button>
+</div>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ const _lim={};
+ return {tom,ruido,seq,
+  lim:(k,ms)=>{const n=performance.now();if(_lim[k]&&n-_lim[k]<ms)return false;_lim[k]=n;return true},
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const $ = id => document.getElementById(id);
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const rnd = (a, b) => a + Math.random() * (b - a);
+let unlocked = 1;
+try { unlocked = Math.max(1, +localStorage.getItem('vs_unlocked') || 1); } catch (e) {}
+const save = () => { try { localStorage.setItem('vs_unlocked', unlocked); } catch (e) {} };
+
+// ---------- Cena ----------
+const renderer = new THREE.WebGLRenderer({ antialias: !isTouch });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+const hemi = new THREE.HemisphereLight(0xd8dcff, 0x504060, 1.5); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1.3); scene.add(sun, sun.target);
+const lam = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, flatShading: true, ...o });
+
+const STAGES = [
+  { name: 'Campo Assombrado', ground: 0x3a5a2a, sky: 0x1a2a3a, enemies: ['bat', 'zombie'] },
+  { name: 'Cemitério Antigo', ground: 0x3d3d35, sky: 0x1b1b2b, enemies: ['zombie', 'skeleton'] },
+  { name: 'Floresta Escura', ground: 0x24401f, sky: 0x0f1f17, enemies: ['bat', 'skeleton', 'ghost'] },
+  { name: 'Pântano Venenoso', ground: 0x3f4a22, sky: 0x1a2010, enemies: ['slime', 'zombie', 'ghost'] },
+  { name: 'Ruínas do Castelo', ground: 0x5a5048, sky: 0x201820, enemies: ['skeleton', 'knight', 'bat'] },
+  { name: 'Deserto de Ossos', ground: 0x8a7448, sky: 0x2a1a10, enemies: ['skeleton', 'mummy', 'bat'] },
+  { name: 'Geleira Maldita', ground: 0x8fa8b8, sky: 0x203040, enemies: ['ghost', 'knight', 'slime'] },
+  { name: 'Vulcão', ground: 0x3a1a14, sky: 0x2a0a05, enemies: ['demon', 'bat', 'skeleton'] },
+  { name: 'Abismo', ground: 0x1a1030, sky: 0x05030a, enemies: ['demon', 'ghost', 'knight'] },
+  { name: 'Trono da Noite', ground: 0x2a0a1a, sky: 0x0a0005, enemies: ['demon', 'knight', 'mummy', 'ghost'] },
+];
+const ETYPES = {
+  bat: { hp: 8, speed: 3.6, dmg: 5, xp: 1, size: 0.45, color: 0x7b2cbf, geo: () => { const g = new THREE.OctahedronGeometry(0.5, 0); g.scale(1.6, 0.4, 0.8); return g; }, fly: true },
+  zombie: { hp: 16, speed: 1.9, dmg: 8, xp: 1, size: 0.5, color: 0x6a994e, geo: () => new THREE.BoxGeometry(0.7, 1.4, 0.5) },
+  skeleton: { hp: 22, speed: 2.4, dmg: 9, xp: 2, size: 0.45, color: 0xe9ecef, geo: () => new THREE.BoxGeometry(0.5, 1.5, 0.35) },
+  ghost: { hp: 18, speed: 2.9, dmg: 10, xp: 2, size: 0.5, color: 0xa2d2ff, geo: () => new THREE.ConeGeometry(0.5, 1.4, 6), fly: true, transparent: true },
+  slime: { hp: 35, speed: 1.6, dmg: 10, xp: 3, size: 0.6, color: 0x80ed99, geo: () => { const g = new THREE.IcosahedronGeometry(0.6, 0); g.scale(1, 0.7, 1); return g; } },
+  knight: { hp: 70, speed: 1.8, dmg: 16, xp: 4, size: 0.6, color: 0x6c757d, geo: () => new THREE.BoxGeometry(0.9, 1.7, 0.7) },
+  mummy: { hp: 55, speed: 2.1, dmg: 14, xp: 4, size: 0.55, color: 0xd4c4a0, geo: () => new THREE.CylinderGeometry(0.35, 0.4, 1.6, 6) },
+  demon: { hp: 90, speed: 2.7, dmg: 20, xp: 6, size: 0.65, color: 0xd00000, geo: () => new THREE.DodecahedronGeometry(0.7, 0) },
+};
+const GEOS = {}, MATS = {};
+for (const [k, t] of Object.entries(ETYPES)) { GEOS[k] = t.geo(); GEOS[k].translate(0, t.fly ? 1.2 : (GEOS[k].boundingBox ? 0 : 0.75), 0); MATS[k] = lam(t.color, t.transparent ? { transparent: true, opacity: 0.7 } : {}); }
+const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2020 });
+const eyeGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+
+// chão infinito com textura de grade
+function groundTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.12})`; g.fillRect(Math.random() * 64, Math.random() * 64, 4 + Math.random() * 8, 4 + Math.random() * 8); }
+  g.strokeStyle = 'rgba(0,0,0,0.15)'; g.strokeRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(40, 40); t.magFilter = THREE.NearestFilter; return t;
+}
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshLambertMaterial({ map: groundTex(), color: 0x3a5a2a }));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+// decoração reciclada ao redor do jogador
+const decoGeos = [new THREE.DodecahedronGeometry(0.6, 0), new THREE.ConeGeometry(0.8, 2.2, 5), new THREE.CylinderGeometry(0.3, 0.4, 1.2, 5)];
+const decos = [];
+for (let i = 0; i < 70; i++) { const m = new THREE.Mesh(decoGeos[i % 3], lam(0x555555)); m.position.set(rnd(-40, 40), 0.4, rnd(-40, 40)); m.rotation.y = rnd(0, 6); scene.add(m); decos.push(m); }
+
+// ---------- Jogador ----------
+const player = new THREE.Group();
+const robe = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.4, 7), lam(0x3a0ca3)); robe.position.y = 0.7; player.add(robe);
+const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 0), lam(0xf1c27d)); head.position.y = 1.55; player.add(head);
+const hat = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.9, 7), lam(0x7209b7)); hat.position.y = 2.05; hat.rotation.z = 0.15; player.add(hat);
+const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.06, 10), lam(0x7209b7)); brim.position.y = 1.72; player.add(brim);
+const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.8, 4), lam(0x6b4a2a)); staff.position.set(0.5, 0.9, 0); player.add(staff);
+const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.15, 0), new THREE.MeshBasicMaterial({ color: 0x4cc9f0 })); gem.position.set(0.5, 1.85, 0); player.add(gem);
+scene.add(player);
+const pLight = new THREE.PointLight(0x9d4edd, 2, 14); pLight.position.y = 2; player.add(pLight);
+const hpBg = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.12), new THREE.MeshBasicMaterial({ color: 0x330000 }));
+const hpFg = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.12), new THREE.MeshBasicMaterial({ color: 0xff3355 })); hpFg.position.z = 0.001; hpBg.add(hpFg);
+scene.add(hpBg);
+
+// ---------- Armas e melhorias ----------
+const UPG = {
+  wand: { ic: '🔮', name: 'Varinha Mágica', desc: l => l === 0 ? 'Dispara no inimigo mais próximo.' : '+1 projétil e +20% dano', max: 6, weapon: true },
+  orbs: { ic: '🌀', name: 'Orbes Giratórios', desc: l => l === 0 ? 'Orbes giram ao seu redor.' : '+1 orbe, mais dano', max: 6, weapon: true },
+  aura: { ic: '✨', name: 'Aura Sagrada', desc: l => l === 0 ? 'Fere inimigos próximos.' : '+raio e +dano', max: 5, weapon: true },
+  axe: { ic: '🪓', name: 'Machados', desc: l => l === 0 ? 'Arremessa machados giratórios.' : '+1 machado, +dano', max: 5, weapon: true },
+  bolt: { ic: '⚡', name: 'Relâmpago', desc: l => l === 0 ? 'Raios atingem inimigos aleatórios.' : '+1 raio, +dano', max: 5, weapon: true },
+  speed: { ic: '👟', name: 'Botas Velozes', desc: () => '+12% velocidade', max: 5 },
+  heart: { ic: '❤️', name: 'Coração Vital', desc: () => '+25 vida máxima e cura', max: 5 },
+  magnet: { ic: '🧲', name: 'Ímã', desc: () => '+50% alcance de coleta', max: 4 },
+  might: { ic: '💪', name: 'Força', desc: () => '+15% de dano em tudo', max: 5 },
+  haste: { ic: '⏱️', name: 'Pressa', desc: () => '-10% tempo de recarga', max: 4 },
+  regen: { ic: '🌿', name: 'Regeneração', desc: () => '+0,6 vida por segundo', max: 4 },
+};
+let build, stage, hp, maxHp, xp, lvl, xpNext, kills, time, stageLen, bossSpawned, boss, running = false, paused = false;
+let enemies = [], gems = [], shots = [], fx = [], axes = [], orbMeshes = [], cds = {}, auraMesh = null, chests = [];
+const mul = () => 1 + (build.might || 0) * 0.15;
+const cdm = () => 1 - (build.haste || 0) * 0.1;
+
+function newBuild() { return { wand: 1 }; }
+function applyUpgrade(k) {
+  build[k] = (build[k] || 0) + 1;
+  if (k === 'heart') { maxHp += 25; hp = Math.min(maxHp, hp + 40); }
+  if (k === 'orbs') rebuildOrbs();
+  if (k === 'aura') rebuildAura();
+  renderWeapons();
+}
+function randomChoices(n) {
+  const weapons = Object.keys(UPG).filter(k => UPG[k].weapon && build[k]).length;
+  const pool = Object.keys(UPG).filter(k => (build[k] || 0) < UPG[k].max && !(UPG[k].weapon && !build[k] && weapons >= 4));
+  pool.sort(() => Math.random() - 0.5);
+  return pool.slice(0, n);
+}
+function renderWeapons() {
+  $('weapons').innerHTML = Object.keys(build).map(k => `<div>${UPG[k].ic} ${build[k]}</div>`).join('');
+}
+function rebuildOrbs() {
+  orbMeshes.forEach(m => scene.remove(m)); orbMeshes = [];
+  const n = (build.orbs || 0) + 1;
+  if (!build.orbs) return;
+  for (let i = 0; i < n; i++) { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 0), new THREE.MeshBasicMaterial({ color: 0x4cc9f0 })); scene.add(m); orbMeshes.push(m); }
+}
+function rebuildAura() {
+  if (auraMesh) scene.remove(auraMesh);
+  if (!build.aura) return;
+  auraMesh = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.18 }));
+  auraMesh.rotation.x = -Math.PI / 2; auraMesh.position.y = 0.05; scene.add(auraMesh);
+}
+const auraR = () => 2.2 + (build.aura || 0) * 0.5;
+
+// ---------- Inimigos ----------
+function spawnEnemy(type, isBoss = false) {
+  const T = ETYPES[type];
+  const m = new THREE.Mesh(GEOS[type], MATS[type]);
+  for (const s of [-1, 1]) { const e = new THREE.Mesh(eyeGeo, eyeMat); e.position.set(s * 0.13, T.fly ? 1.35 : 1.15, T.size * 0.75); m.add(e); }
+  const a = Math.random() * Math.PI * 2, r = isTouch && innerWidth < innerHeight ? 20 : 24;
+  m.position.set(player.position.x + Math.cos(a) * r, 0, player.position.z + Math.sin(a) * r);
+  const hpMul = (1 + (stage - 1) * 0.32) * (1 + time / 100);
+  const e = { m, type, T, hp: T.hp * hpMul, max: T.hp * hpMul, speed: T.speed * rnd(0.9, 1.1), dmg: T.dmg * (1 + (stage - 1) * 0.08), r: T.size, hitT: 0, boss: isBoss, knock: new THREE.Vector3() };
+  if (isBoss) { m.scale.setScalar(3); e.hp = e.max = 900 * stage * (1 + stage * 0.15); e.r = T.size * 3; e.speed = 2.3; e.dmg *= 2.5; m.material = lam(0xff006e, { emissive: 0x330011 }); }
+  scene.add(m); enemies.push(e);
+  return e;
+}
+function hurt(e, dmg, kb = 0, from = null) {
+  if (e.dead) return;
+  e.hp -= dmg; e.hitT = 0.1; if (SOM.lim('hit',90)) SOM.tom(420,.04,'square',.025,200);
+  if (kb && from && !e.boss) { e.knock.subVectors(e.m.position, from).setY(0).normalize().multiplyScalar(kb); }
+  if (e.hp <= 0) {
+    e.dead = true; kills++; if (SOM.lim('morte',80)) SOM.tom(140,.15,'triangle',.05,60); scene.remove(e.m);
+    dropGem(e.m.position, e.T.xp * (e.boss ? 0 : 1));
+    burst(e.m.position, e.boss ? 0xffd166 : ETYPES[e.type].color, e.boss ? 30 : 4);
+    if (e.boss) bossDown();
+  }
+}
+const gemGeo = new THREE.OctahedronGeometry(0.18, 0);
+const gemMats = [new THREE.MeshBasicMaterial({ color: 0x4cc9f0 }), new THREE.MeshBasicMaterial({ color: 0x80ffdb }), new THREE.MeshBasicMaterial({ color: 0xff70a6 })];
+function dropGem(p, v) {
+  if (!v) return;
+  if (gems.length > 250) { const g0 = gems.shift(); scene.remove(g0.m); v += g0.v; } // junta cristais antigos
+  const m = new THREE.Mesh(gemGeo, gemMats[v >= 5 ? 2 : v >= 2 ? 1 : 0]); m.position.set(p.x, 0.35, p.z); if (v >= 5) m.scale.setScalar(1.6);
+  scene.add(m); gems.push({ m, v, pull: false });
+}
+const burstG = new THREE.TetrahedronGeometry(0.12);
+function burst(p, col, n) { for (let i = 0; i < n; i++) { const m = new THREE.Mesh(burstG, new THREE.MeshBasicMaterial({ color: col })); m.position.set(p.x, 0.8, p.z); scene.add(m); fx.push({ m, t: 0.45, v: new THREE.Vector3(rnd(-5, 5), rnd(2, 6), rnd(-5, 5)) }); } }
+
+// ---------- Fluxo ----------
+function setStageLook() {
+  const S = STAGES[stage - 1];
+  ground.material.color.set(S.ground);
+  scene.background = new THREE.Color(S.sky); scene.fog = new THREE.Fog(S.sky, 26, 50);
+  decos.forEach(d => d.material.color.set(new THREE.Color(S.ground).multiplyScalar(0.6 + Math.random() * 0.3)));
+}
+function startStage(n, keepBuild) { SOM.fase();
+  stage = n;
+  enemies.forEach(e => scene.remove(e.m)); gems.forEach(g => scene.remove(g.m)); shots.forEach(s => scene.remove(s.m)); axes.forEach(a => scene.remove(a.m)); chests.forEach(c => scene.remove(c.m));
+  enemies = []; gems = []; shots = []; axes = []; chests = [];
+  if (!keepBuild) {
+    build = newBuild(); maxHp = 100 + (n - 1) * 15; lvl = 1; xp = 0; xpNext = 5;
+    // começar numa fase avançada concede melhorias automáticas
+    for (let i = 0; i < (n - 1) * 3; i++) { const c = randomChoices(1)[0]; if (c) applyUpgrade(c); lvl++; }
+    xpNext = 5 + lvl * 4;
+    if (n > 1) setTimeout(() => msg(`Começou com ${(n - 1) * 3} melhorias`), 1600);
+  }
+  stageSnapshot = { build: { ...build }, maxHp, lvl, xpNext };
+  hp = maxHp; kills = 0; time = 0; bossSpawned = false; boss = null; cds = {};
+  stageLen = 50 + n * 10;
+  player.position.set(0, 0, 0);
+  rebuildOrbs(); rebuildAura(); renderWeapons(); setStageLook();
+  $('menu').classList.add('hidden'); $('over').classList.add('hidden'); $('bossbar').classList.add('hidden');
+  $('pause').style.display = 'block';
+  running = true; paused = false;
+  msg(`Fase ${n}: ${STAGES[n - 1].name}`);
+  updateHud();
+}
+let stageSnapshot = null;
+function retryStage() {
+  build = { ...stageSnapshot.build }; maxHp = stageSnapshot.maxHp; lvl = stageSnapshot.lvl; xpNext = stageSnapshot.xpNext; xp = 0;
+  startStage(stage, true);
+}
+function bossDown() { SOM.explosao();
+  $('bossbar').classList.add('hidden');
+  msg('Chefão derrotado!');
+  // baú de recompensa
+  const c = new THREE.Mesh(new THREE.BoxGeometry(1, 0.8, 0.7), lam(0xffb703, { emissive: 0x442200 }));
+  c.position.copy(boss.m.position); c.position.y = 0.4; scene.add(c); chests.push({ m: c });
+}
+function stageClear() { SOM.vitoria();
+  running = false; $('pause').style.display = 'none';
+  if (stage >= unlocked && stage < 10) { unlocked = stage + 1; save(); }
+  $('over').classList.remove('hidden');
+  $('oTitle').textContent = stage === 10 ? 'A noite acabou! 🌅🏆' : `Fase ${stage} completa!`;
+  $('oText').textContent = `${kills} inimigos derrotados · Nível ${lvl}` + (stage < 10 ? ' · Suas melhorias continuam na próxima fase!' : '');
+  $('oBtn').textContent = stage === 10 ? 'Jogar de novo' : 'Próxima fase';
+  $('oBtn').onclick = () => stage === 10 ? startStage(1, false) : startStage(stage + 1, true);
+}
+function die() { SOM.derrota();
+  running = false; $('pause').style.display = 'none';
+  $('over').classList.remove('hidden');
+  $('oTitle').textContent = 'Você caiu...';
+  $('oText').textContent = `Sobreviveu ${fmt(time)} na fase ${stage} e derrotou ${kills} inimigos.`;
+  $('oBtn').textContent = 'Tentar a fase de novo'; $('oBtn').onclick = retryStage;
+}
+function levelUp() { SOM.item();
+  lvl++; xp -= xpNext; xpNext = Math.floor(5 + lvl * 4 + Math.pow(lvl, 1.4));
+  const choices = randomChoices(3);
+  if (!choices.length) { hp = Math.min(maxHp, hp + 30); return; }
+  paused = true;
+  const box = $('cards'); box.innerHTML = '';
+  choices.forEach(k => {
+    const u = UPG[k], l = build[k] || 0;
+    const d = document.createElement('div'); d.className = 'card';
+    d.innerHTML = `<span class="lv">${l ? 'Nv ' + (l + 1) : 'NOVO!'}</span><div class="ic">${u.ic}</div><b>${u.name}</b><small>${u.desc(l)}</small>`;
+    d.onclick = () => { applyUpgrade(k); $('levelup').classList.add('hidden'); paused = false; if (xp >= xpNext) levelUp(); };
+    box.appendChild(d);
+  });
+  $('levelup').classList.remove('hidden');
+}
+const fmt = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+function updateHud() {
+  $('xp').firstElementChild.style.width = Math.min(100, xp / xpNext * 100) + '%'; $('xpLvl').textContent = 'Nv ' + lvl;
+  $('hStage').textContent = `Fase ${stage}/10`;
+  const left = Math.max(0, stageLen - time);
+  $('timer').innerHTML = bossSpawned ? `CHEFÃO!<small>${STAGES[stage - 1].name}</small>` : `${fmt(left)}<small>até o chefão</small>`;
+  $('hKills').textContent = '💀 ' + kills;
+}
+function msg(t, ms = 1800) { const m = $('msg'); m.textContent = t; m.style.opacity = 1; clearTimeout(msg.t); msg.t = setTimeout(() => m.style.opacity = 0, ms); }
+function renderMenu() {
+  const box = $('levels'); box.innerHTML = '';
+  for (let i = 1; i <= 10; i++) { const b = document.createElement('button'); b.textContent = i; b.disabled = i > unlocked; b.onclick = () => startStage(i, false); box.appendChild(b); }
+}
+$('pause').onclick = () => { if (!running || $('levelup').classList.contains('hidden') === false) return; paused = true; $('pauseScr').classList.remove('hidden'); };
+$('resume').onclick = () => { paused = false; $('pauseScr').classList.add('hidden'); };
+$('quit').onclick = () => { $('pauseScr').classList.add('hidden'); running = false; paused = false; $('pause').style.display = 'none'; renderMenu(); $('menu').classList.remove('hidden'); };
+$('oMenu').onclick = () => { $('over').classList.add('hidden'); renderMenu(); $('menu').classList.remove('hidden'); };
+renderMenu();
+
+// ---------- Entrada ----------
+const keys = {};
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Escape' || e.code === 'KeyP') $('pause').click(); });
+addEventListener('keyup', e => keys[e.code] = false);
+// joystick flutuante: toque em qualquer lugar
+const joy = { x: 0, y: 0, id: null, ox: 0, oy: 0 };
+const joyEl = $('joy'), knob = joyEl.firstElementChild;
+renderer.domElement.addEventListener('pointerdown', e => { if (!running) return; joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joyEl.style.left = e.clientX + 'px'; joyEl.style.top = e.clientY + 'px'; joyEl.style.display = 'block'; try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {} });
+renderer.domElement.addEventListener('pointermove', e => { if (e.pointerId !== joy.id) return; let dx = e.clientX - joy.ox, dy = e.clientY - joy.oy; const m = 60, d = Math.hypot(dx, dy); if (d > m) { dx *= m / d; dy *= m / d; } joy.x = dx / m; joy.y = dy / m; knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; });
+const endJoy = e => { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; joyEl.style.display = 'none'; knob.style.transform = 'translate(-50%,-50%)'; };
+renderer.domElement.addEventListener('pointerup', endJoy); renderer.domElement.addEventListener('pointercancel', endJoy);
+
+// ---------- Atualização ----------
+const tmp = new THREE.Vector3();
+function nearest(p, maxD = 30, exclude) { let best = null, bd = maxD; for (const e of enemies) { if (e.dead || e === exclude) continue; const d = e.m.position.distanceTo(p); if (d < bd) { bd = d; best = e; } } return best; }
+const shotGeo = new THREE.IcosahedronGeometry(0.2, 0), shotMat = new THREE.MeshBasicMaterial({ color: 0xc77dff });
+const axeGeo = new THREE.BoxGeometry(0.7, 0.1, 0.3), axeMat = lam(0xadb5bd);
+function weapons(dt) {
+  const p = player.position, M = mul();
+  for (const k in cds) cds[k] -= dt;
+  // varinha
+  if (build.wand && (cds.wand || 0) <= 0) {
+    cds.wand = 0.9 * cdm();
+    const n = build.wand; let last = null;
+    for (let i = 0; i < n; i++) {
+      const t = nearest(p, 22, i > 0 && enemies.length > 1 ? last : null) || nearest(p, 22); if (!t) break; last = t;
+      const m = new THREE.Mesh(shotGeo, shotMat); m.position.set(p.x, 1, p.z); scene.add(m);
+      const dir = tmp.subVectors(t.m.position, p).setY(0).normalize().clone();
+      dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (i - (n - 1) / 2) * 0.12);
+      shots.push({ m, dir, speed: 16, life: 1.6, dmg: 12 * (1 + (build.wand - 1) * 0.2) * M, pierce: Math.floor(build.wand / 3) });
+    }
+  }
+  // orbes
+  if (build.orbs) {
+    const n = orbMeshes.length, R = 2.4, t = performance.now() / 1000 * (2 + build.orbs * 0.2);
+    orbMeshes.forEach((o, i) => {
+      const a = t + i / n * Math.PI * 2; o.position.set(p.x + Math.cos(a) * R, 0.9, p.z + Math.sin(a) * R); o.rotation.y += dt * 5;
+      for (const e of enemies) { if (e.dead) continue; if ((e.orbHit || 0) > performance.now()) continue; if (e.m.position.distanceTo(o.position) < e.r + 0.5) { hurt(e, (8 + build.orbs * 4) * M, 1.5, p); e.orbHit = performance.now() + 400; } }
+    });
+  }
+  // aura
+  if (build.aura && auraMesh) {
+    const R = auraR(); auraMesh.position.set(p.x, 0.05, p.z); auraMesh.scale.setScalar(R); auraMesh.material.opacity = 0.14 + Math.sin(performance.now() / 200) * 0.05;
+    if ((cds.aura || 0) <= 0) { cds.aura = 0.5; for (const e of enemies) if (!e.dead && e.m.position.distanceTo(p) < R + e.r) hurt(e, (4 + build.aura * 3) * M, 0.6, p); }
+  }
+  // machados
+  if (build.axe && (cds.axe || 0) <= 0) {
+    cds.axe = 1.8 * cdm();
+    for (let i = 0; i < build.axe; i++) {
+      const m = new THREE.Mesh(axeGeo, axeMat); m.position.set(p.x, 1, p.z); scene.add(m);
+      const a = Math.random() * Math.PI * 2;
+      axes.push({ m, v: new THREE.Vector3(Math.cos(a) * 7, 9, Math.sin(a) * 7), dmg: (20 + build.axe * 8) * M, hit: new Set() });
+    }
+  }
+  // relâmpago
+  if (build.bolt && (cds.bolt || 0) <= 0) {
+    cds.bolt = 2.2 * cdm();
+    const alive = enemies.filter(e => !e.dead && e.m.position.distanceTo(p) < 18);
+    for (let i = 0; i < build.bolt && alive.length; i++) {
+      const e = alive.splice(Math.floor(Math.random() * alive.length), 1)[0];
+      const top = e.m.position.clone().setY(12), pts = [top];
+      for (let k = 1; k < 6; k++) pts.push(new THREE.Vector3(e.m.position.x + rnd(-0.5, 0.5), 12 - k * 2.2, e.m.position.z + rnd(-0.5, 0.5)));
+      pts.push(e.m.position.clone().setY(0.5));
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xfff3b0 }));
+      scene.add(line); fx.push({ m: line, t: 0.12 });
+      for (const o of enemies) if (!o.dead && o.m.position.distanceTo(e.m.position) < 1.6) hurt(o, (30 + build.bolt * 12) * M);
+    }
+  }
+  // projéteis
+  for (const s of shots) {
+    s.life -= dt; s.m.position.addScaledVector(s.dir, s.speed * dt);
+    for (const e of enemies) { if (e.dead || (s.hits && s.hits.has(e))) continue; if (e.m.position.distanceTo(tmp.set(s.m.position.x, 0, s.m.position.z)) < e.r + 0.3) { hurt(e, s.dmg, 1.2, player.position); (s.hits ||= new Set()).add(e); if (s.pierce-- <= 0) { s.life = 0; break; } } }
+    if (s.life <= 0) scene.remove(s.m);
+  }
+  shots = shots.filter(s => s.life > 0);
+  for (const a of axes) {
+    a.v.y -= 18 * dt; a.m.position.addScaledVector(a.v, dt); a.m.rotation.y += dt * 15; a.m.rotation.z += dt * 10;
+    for (const e of enemies) { if (e.dead || a.hit.has(e)) continue; if (Math.hypot(e.m.position.x - a.m.position.x, e.m.position.z - a.m.position.z) < e.r + 0.5 && a.m.position.y < 2.5) { hurt(e, a.dmg, 1, a.m.position); a.hit.add(e); } }
+    if (a.m.position.y < -1) { scene.remove(a.m); a.done = true; }
+  }
+  axes = axes.filter(a => !a.done);
+}
+// grade espacial para separar inimigos
+const grid = new Map();
+function separate() {
+  grid.clear();
+  for (const e of enemies) { if (e.dead) continue; const k = Math.floor(e.m.position.x / 1.5) + ',' + Math.floor(e.m.position.z / 1.5); (grid.get(k) || grid.set(k, []).get(k)).push(e); }
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const cx = Math.floor(e.m.position.x / 1.5), cz = Math.floor(e.m.position.z / 1.5);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      const list = grid.get((cx + dx) + ',' + (cz + dz)); if (!list) continue;
+      for (const o of list) { if (o === e) continue; const ex = e.m.position.x - o.m.position.x, ez = e.m.position.z - o.m.position.z, d = Math.hypot(ex, ez), R = (e.r + o.r) * 0.8; if (d < R && d > 0.001) { const push = (R - d) * 0.5; const w = e.boss ? 0.1 : 1; e.m.position.x += ex / d * push * w; e.m.position.z += ez / d * push * w; } }
+    }
+  }
+}
+function update(dt) {
+  time += dt;
+  const p = player.position;
+  // movimento
+  let mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.x;
+  let mz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + joy.y;
+  const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
+  const spd = 5 * (1 + (build.speed || 0) * 0.12);
+  p.x += mx * spd * dt; p.z += mz * spd * dt;
+  if (l > 0.1) { player.rotation.y = Math.atan2(mx, mz); robe.position.y = 0.7 + Math.abs(Math.sin(time * 12)) * 0.08; }
+  hp = Math.min(maxHp, hp + (build.regen || 0) * 0.6 * dt);
+  // spawn
+  const S = STAGES[stage - 1];
+  const maxAlive = Math.min(40 + stage * 14 + time * 0.6, isTouch ? 150 : 220);
+  const rate = 1.5 + stage * 0.45 + time / 25;
+  if (!bossSpawned || true) {
+    let n = rate * dt; while (n > 0) { if (Math.random() < n && enemies.length < maxAlive) spawnEnemy(S.enemies[Math.floor(Math.random() * S.enemies.length)]); n -= 1; }
+  }
+  // ondas em anel periódicas
+  if (Math.floor(time) % 30 === 29 && Math.floor(time - dt) % 30 !== 29) { for (let i = 0; i < 12 + stage * 3; i++) spawnEnemy(S.enemies[0]); msg('Uma horda se aproxima!', 1200); }
+  if (!bossSpawned && time >= stageLen) {
+    bossSpawned = true; boss = spawnEnemy(S.enemies[S.enemies.length - 1], true);
+    $('bossName').textContent = `CHEFÃO — Senhor da ${S.name}`; $('bossbar').classList.remove('hidden'); msg('O CHEFÃO chegou!');
+  }
+  if (boss && !boss.dead) $('bossbar').querySelector('i').style.width = Math.max(0, boss.hp / boss.max * 100) + '%';
+  // inimigos
+  for (const e of enemies) {
+    if (e.dead) continue;
+    tmp.subVectors(p, e.m.position).setY(0); const d = tmp.length();
+    tmp.normalize();
+    e.m.position.addScaledVector(tmp, e.speed * dt).addScaledVector(e.knock, dt);
+    e.knock.multiplyScalar(Math.max(0, 1 - dt * 8));
+    e.m.rotation.y = Math.atan2(tmp.x, tmp.z);
+    if (e.T.fly) e.m.position.y = Math.sin(time * 6 + e.r * 10) * 0.2;
+    e.hitT -= dt; const s = (e.boss ? 3 : 1) * (e.hitT > 0 ? 1.25 : 1); e.m.scale.setScalar(s);
+    if (d < e.r + 0.45) { hp -= e.dmg * dt * 0.8; if (SOM.lim('dano',450)) SOM.dano(); }
+    // recicla inimigos que ficaram muito longe
+    if (d > 38 && !e.boss) { const a = Math.random() * Math.PI * 2; e.m.position.set(p.x + Math.cos(a) * 22, 0, p.z + Math.sin(a) * 22); }
+  }
+  enemies = enemies.filter(e => !e.dead);
+  separate();
+  weapons(dt);
+  // cristais
+  const mag = 2.2 * (1 + (build.magnet || 0) * 0.5);
+  for (const g of gems) {
+    const d = g.m.position.distanceTo(tmp.set(p.x, 0.35, p.z));
+    if (d < mag) g.pull = true;
+    if (g.pull) { tmp.sub(g.m.position).normalize(); g.m.position.addScaledVector(tmp, Math.max(8, 14 - d) * dt); }
+    g.m.rotation.y += dt * 3;
+    if (d < 0.6) { xp += g.v; if (SOM.lim('gema',50)) SOM.tom(1200+Math.random()*300,.06,'sine',.03); g.got = true; scene.remove(g.m); }
+  }
+  gems = gems.filter(g => !g.got);
+  // baú
+  for (const c of chests) {
+    c.m.rotation.y += dt;
+    if (c.m.position.distanceTo(tmp.set(p.x, 0.4, p.z)) < 1.3) { scene.remove(c.m); c.got = true; gems.forEach(g => g.pull = true); setTimeout(stageClear, 900); msg('Tesouro! ✨'); }
+  }
+  chests = chests.filter(c => !c.got);
+  while (xp >= xpNext && !paused) levelUp();
+  if (hp <= 0) { hp = 0; die(); }
+}
+// ---------- Loop ----------
+const clock = new THREE.Clock();
+let hudT = 0;
+function loop() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (running && !paused) { update(dt); hudT -= dt; if (hudT <= 0) { hudT = 0.1; updateHud(); } }
+  const p = player.position;
+  const portrait = innerWidth < innerHeight;
+  camera.position.set(p.x, portrait ? 24 : 18, p.z + (portrait ? 10 : 11));
+  camera.lookAt(p.x, 0, p.z + 0.5);
+  sun.position.set(p.x - 10, 20, p.z + 10); sun.target.position.copy(p);
+  ground.position.set(Math.round(p.x / 4) * 4, 0, Math.round(p.z / 4) * 4);
+  for (const d of decos) { if (d.position.x - p.x > 40) d.position.x -= 80; if (p.x - d.position.x > 40) d.position.x += 80; if (d.position.z - p.z > 40) d.position.z -= 80; if (p.z - d.position.z > 40) d.position.z += 80; }
+  hpBg.position.set(p.x, 2.7, p.z); hpBg.quaternion.copy(camera.quaternion); hpFg.scale.x = Math.max(0.001, hp / (maxHp || 100)); hpFg.position.x = -(1 - hpFg.scale.x) * 0.6;
+  gem.rotation.y += dt * 3;
+  for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.t -= dt; if (f.v) { f.m.position.addScaledVector(f.v, dt); f.v.y -= 15 * dt; } if (f.t <= 0) { scene.remove(f.m); fx.splice(i, 1); } }
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+stage = 1; build = newBuild(); maxHp = 100; hp = 100; setStageLook();
+loop();
+function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); }
+addEventListener('resize', resize); resize();
+</script>
+</body>
+</html>

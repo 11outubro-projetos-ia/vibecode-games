@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#fbf7fa">
+<title>Pastel Pour</title>
+
+<style>
+:root {
+  --bg: #fbf7fa;
+  --ink: #554d5b;
+  --muted: #988d9b;
+  --panel: #fffafd;
+  --line: #eee4ef;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 5%, #f3eafa, transparent 34%),
+    radial-gradient(circle at 90% 20%, #e9f4f0, transparent 30%),
+    var(--bg);
+  font-family: "Trebuchet MS", system-ui, sans-serif;
+  color: var(--ink);
+  display: flex;
+  justify-content: center;
+}
+
+.app {
+  width: min(100%, 560px);
+  min-height: 100vh;
+  padding: 22px 17px 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  text-align: center;
+  padding: 8px 0 14px;
+}
+
+.logo {
+  font-size: 12px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #a38bab;
+  font-weight: 800;
+}
+
+h1 {
+  font-size: 38px;
+  margin: 5px 0 4px;
+  color: #66566f;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.stats {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  padding: 10px;
+  flex: 1;
+  text-align: center;
+}
+
+.stat small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stat strong {
+  font-size: 18px;
+  color: #76617f;
+}
+
+.progress-wrap {
+  height: 7px;
+  background: #eee6f0;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.progress {
+  height: 100%;
+  width: 10%;
+  background: linear-gradient(90deg, #c7acd7, #a8cfc2);
+  transition: width .3s;
+}
+
+.game-card {
+  background: rgba(255,250,253,.9);
+  border: 1px solid #f0e7f0;
+  border-radius: 25px;
+  padding: 19px 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  box-shadow: 0 10px 28px rgba(116,91,123,.10);
+}
+
+.instruction {
+  text-align: center;
+  color: #95889b;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0,1fr));
+  gap: 19px 10px;
+  justify-items: center;
+  align-content: center;
+  flex: 1;
+  padding: 8px 1px 16px;
+}
+
+.tube {
+  width: clamp(43px,11vw,57px);
+  height: clamp(145px,36vw,184px);
+  border: 3px solid rgba(177,157,184,.62);
+  border-top: 0;
+  border-radius: 0 0 19px 19px;
+  background: rgba(255,255,255,.55);
+  position: relative;
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: hidden;
+  padding: 0 3px 4px;
+  cursor: pointer;
+  transition: transform .18s;
+  touch-action: manipulation;
+}
+
+.tube::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  top: 0;
+  height: 10px;
+  border: 3px solid rgba(177,157,184,.62);
+  border-bottom: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.tube.selected {
+  transform: translateY(-10px);
+  border-color: #b18ac7;
+  filter: drop-shadow(0 7px 7px rgba(177,138,199,.22));
+}
+
+.tube.done{box-shadow:0 0 0 3px #fff,0 0 18px #f0d49b}
+.tube.pour{animation:despeja .25s}
+@keyframes despeja{50%{transform:translateY(-10px) rotate(-6deg)}}
+.tube.erro{animation:nao .25s}
+@keyframes nao{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.liquid {
+  height: 25%;
+  width: 100%;
+  flex: 0 0 25%;
+  border-radius: 5px 5px 8px 8px;
+  border-top: 2px solid rgba(255,255,255,.48);
+}
+
+.liquid:first-child {
+  border-radius: 5px 5px 12px 12px;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+
+button {
+  font-family: inherit;
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.control {
+  background: #f2eaf5;
+  color: #80698c;
+  padding: 11px 16px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: bold;
+  box-shadow: 0 3px 0 #e5d9eb;
+}
+
+.control.primary {
+  background: #dceee7;
+  color: #5e8879;
+  box-shadow: 0 3px 0 #c8e1d6;
+}
+
+.control:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.message {
+  min-height: 27px;
+  text-align: center;
+  margin-top: 14px;
+  color: #8b7b91;
+  font-size: 13px;
+}
+
+.footer {
+  text-align: center;
+  color: #b0a5b3;
+  font-size: 11px;
+  margin-top: 15px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(77,62,82,.28);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  z-index: 5;
+}
+
+.overlay.show {
+  display: flex;
+}
+
+.modal {
+  background: #fffafd;
+  border-radius: 25px;
+  padding: 27px 23px;
+  text-align: center;
+  max-width: 330px;
+  width: 100%;
+}
+
+.modal .emoji {
+  font-size: 42px;
+}
+
+.modal h2 {
+  color: #6e5a78;
+}
+
+.modal p {
+  font-size: 14px;
+  color: #928598;
+  line-height: 1.5;
+}
+
+@media(max-width:390px) {
+  .app {
+    padding: 16px 11px 22px;
+  }
+
+  .board {
+    gap: 17px 7px;
+  }
+
+  .game-card {
+    padding: 16px 8px;
+  }
+
+  .control {
+    padding: 10px 13px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<main class="app">
+
+<header>
+  <div class="logo">✿ UM MOMENTO DE CALMA ✿</div>
+  <h1>Pastel Pour</h1>
+  <div class="subtitle">
+    Organize as cores, um tubo de cada vez.
+  </div>
+</header>
+
+<section class="stats">
+  <div class="stat">
+    <small>FASE</small>
+    <strong id="level">1</strong>
+  </div>
+
+  <div class="stat">
+    <small>MOVIMENTOS</small>
+    <strong id="moves">0</strong>
+  </div>
+
+  <div class="stat">
+    <small>RECORDE DA FASE</small>
+    <strong id="best">—</strong>
+  </div>
+</section>
+
+<div class="progress-wrap">
+  <div class="progress" id="progress"></div>
+</div>
+
+<section class="game-card">
+
+  <p class="instruction">
+    Toque em um tubo e depois em outro para despejar.
+  </p>
+
+  <div class="board" id="board"></div>
+
+  <div class="controls">
+    <button class="control" id="undo">↶ Desfazer</button>
+    <button class="control" id="restart">⟳ Reiniciar</button>
+    <button class="control primary" id="new">＋ Novo tubo</button>
+  </div>
+
+  <div class="message" id="message">
+    Vamos começar? 💗
+  </div>
+
+</section>
+
+<div class="footer">
+  Feito para jogar com tranquilidade 🌸
+</div>
+
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="emoji">🌷✨</div>
+    <h2>Você conseguiu!</h2>
+    <p id="winText"></p>
+    <button class="control primary" id="next">
+      Próxima fase →
+    </button>
+  </div>
+</div>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+(() => {
+
+const palette = [
+  "#e9a9b8",
+  "#a9c8e8",
+  "#b8d9c5",
+  "#d9c2e8",
+  "#f0d49b",
+  "#a9d9d5",
+  "#e8b9d5",
+  "#c4c4e8"
+];
+
+const $ = id => document.getElementById(id);
+
+const capacity = 4;
+const bestKey = "pastelPourBest";
+const bestKeyFase = n => bestKey + "-fase" + n;
+
+let level = 1;
+let tubes = [];
+let initial = [];
+let selected = null;
+let moves = 0;
+let history = [];
+let extraTubeUsed = false;
+let ultimoDestino = -1;
+
+let best = 0;
+function lerRecorde() { best = 0; try { best = Number(localStorage.getItem(bestKeyFase(level)) || 0); } catch (e) {} }
+/* sons suaves */
+const somCalmo = (f, d, atraso) => SOM.tom(f, d || 0.25, "sine", 0.07, null, atraso || 0);
+
+function clone(array) {
+  return array.map(tube => tube.slice());
+}
+
+function shuffle(array) {
+  for(let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+
+  return array;
+}
+
+/* verifica se a fase tem solução (busca em profundidade com limite) */
+function temSolucao(inicio) {
+  const vistos = new Set();
+  let nos = 0;
+  const chave = t => t.map(x => x.join(",")).sort().join("|");
+  const ganhou = t => t.every(x => x.length === 0 || (x.length === capacity && x.every(c => c === x[0])));
+  function busca(t) {
+    if (ganhou(t)) return true;
+    if (++nos > 25000) return false;
+    const k = chave(t);
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    for (let a = 0; a < t.length; a++) {
+      const A = t[a];
+      if (!A.length) continue;
+      const c = A[A.length - 1];
+      if (A.length === capacity && A.every(x => x === c)) continue;
+      for (let b = 0; b < t.length; b++) {
+        if (a === b) continue;
+        const B = t[b];
+        if (B.length >= capacity || (B.length && B[B.length - 1] !== c)) continue;
+        if (!B.length && A.every(x => x === c)) continue;
+        const n = t.map(x => x.slice());
+        while (n[a].length && n[a][n[a].length - 1] === c && n[b].length < capacity) n[b].push(n[a].pop());
+        if (busca(n)) return true;
+      }
+    }
+    return false;
+  }
+  return busca(inicio.map(x => x.slice()));
+}
+
+function makeLevel() {
+
+  const colorCount = Math.min(
+    3 + Math.floor((level - 1) / 2),
+    palette.length
+  );
+
+  let pieces = [];
+
+  for(let i = 0; i < colorCount; i++) {
+    for(let n = 0; n < capacity; n++) {
+      pieces.push(i);
+    }
+  }
+
+  const vazios = 2;
+  for (let tentativa = 0; tentativa < 40; tentativa++) {
+    shuffle(pieces);
+    tubes = [];
+    for (let i = 0; i < colorCount; i++) tubes.push(pieces.slice(i * 4, (i + 1) * 4));
+    for (let i = 0; i < vazios; i++) tubes.push([]);
+    const pronto = tubes.slice(0, colorCount).some(t => t.every(c => c === t[0]));
+    if (!pronto && temSolucao(tubes)) break;
+  }
+
+  tubes = [];
+
+  for(let i = 0; i < colorCount; i++) {
+    tubes.push(pieces.slice(i * 4, (i + 1) * 4));
+  }
+
+  for (let i = 0; i < vazios; i++) tubes.push([]);
+
+  // Evita começar com todas as cores organizadas.
+  if(false) {
+    let p = tubes.slice(0, colorCount).flat();
+    shuffle(p);
+
+    for(let i = 0; i < colorCount; i++) {
+      tubes[i] = p.slice(i * 4, (i + 1) * 4);
+    }
+  }
+
+  initial = clone(tubes);
+  selected = null;
+  moves = 0;
+  history = [];
+  extraTubeUsed = false;
+  lerRecorde();
+
+  $("message").textContent =
+    "Encontre o lugar certo para cada cor. 🌸";
+
+  $("overlay").classList.remove("show");
+
+  render();
+}
+
+function render() {
+
+  $("board").innerHTML = "";
+
+  $("board").style.gridTemplateColumns =
+    `repeat(${Math.min(tubes.length, 5)}, minmax(0,1fr))`;
+
+  tubes.forEach((tube, i) => {
+
+    const el = document.createElement("button");
+
+    el.className = "tube" +
+      (selected === i ? " selected" : "") +
+      (tube.length === capacity && tube.every(c => c === tube[0]) ? " done" : "") +
+      (ultimoDestino === i ? " pour" : "");
+
+    el.setAttribute(
+      "aria-label",
+      `Tubo ${i + 1}, ${tube.length} partes`
+    );
+
+    el.addEventListener("click", () => tapTube(i));
+
+    tube.forEach(color => {
+
+      const liquid = document.createElement("span");
+
+      liquid.className = "liquid";
+      liquid.style.background = palette[color];
+
+      el.appendChild(liquid);
+
+    });
+
+    $("board").appendChild(el);
+
+  });
+
+  $("level").textContent = level;
+  $("moves").textContent = moves;
+  $("best").textContent = best || "—";
+  ultimoDestino = -1;
+
+  $("progress").style.width =
+    `${((level - 1) % 10 + 1) * 10}%`;
+
+  $("undo").disabled = history.length === 0;
+  $("new").disabled = extraTubeUsed;
+}
+
+function tapTube(i) {
+
+  if(selected === null) {
+
+    if(tubes[i].length === 0) {
+      $("message").textContent =
+        "Escolha primeiro um tubo com líquido.";
+      return;
+    }
+
+    selected = i;
+    somCalmo(523, 0.12);
+
+    $("message").textContent =
+      "Agora escolha um tubo de destino.";
+
+    render();
+    return;
+  }
+
+  if(selected === i) {
+    selected = null;
+    render();
+    return;
+  }
+
+  const from = tubes[selected];
+  const to = tubes[i];
+
+  const color = from[from.length - 1];
+
+  if(
+    to.length < capacity &&
+    (to.length === 0 || to[to.length - 1] === color)
+  ) {
+
+    history.push({
+      tubes: clone(tubes),
+      moves: moves,
+      extra: extraTubeUsed
+    });
+
+    let amount = 0;
+
+    while(
+      from.length > 0 &&
+      from[from.length - 1] === color &&
+      to.length < capacity
+    ) {
+      to.push(from.pop());
+      amount++;
+    }
+
+    moves++;
+    selected = null;
+    ultimoDestino = i;
+    for (let s = 0; s < amount; s++) somCalmo(330 + s * 70, 0.18, s * 0.07);
+    const completo = to.length === capacity && to.every(c => c === to[0]);
+    if (completo) { somCalmo(784, 0.3, 0.2); somCalmo(1047, 0.4, 0.32); }
+
+    $("message").textContent =
+      amount === 1
+      ? "Boa! Mais uma cor no lugar."
+      : `Ótimo! Você moveu ${amount} partes.`;
+
+    render();
+
+    if(isWon()) {
+      setTimeout(showWin, 350);
+    }
+
+  } else if(to.length === 0 || to[to.length - 1] !== color) {
+
+    selected = i;
+    SOM.tom(200, 0.12, "triangle", 0.05);
+
+    $("message").textContent =
+      "Esse tubo não combina. Escolha outro destino.";
+
+    render();
+
+  } else {
+
+    SOM.tom(200, 0.12, "triangle", 0.05);
+    $("message").textContent =
+      "Esse tubo já está cheio.";
+
+    selected = null;
+    render();
+
+  }
+}
+
+function isWon() {
+
+  return tubes.every(tube =>
+    tube.length === 0 ||
+    (
+      tube.length === capacity &&
+      tube.every(color => color === tube[0])
+    )
+  );
+
+}
+
+function showWin() {
+
+  const novo = best === 0 || moves < best;
+  if(novo) {
+    best = moves;
+    try { localStorage.setItem(bestKeyFase(level), String(best)); } catch (e) {}
+  }
+  [523, 659, 784, 1047].forEach((f, k) => somCalmo(f, 0.45, k * 0.18));
+
+  $("winText").textContent =
+    `Fase ${level} concluída em ${moves} movimentos. Muito bem!` + (novo ? " 🏆 Novo recorde desta fase!" : "");
+
+  $("best").textContent = best;
+
+  $("overlay").classList.add("show");
+}
+
+// DESFAZER
+$("undo").addEventListener("click", () => {
+
+  if(history.length === 0) return;
+
+  const previous = history.pop();
+
+  tubes = previous.tubes;
+  moves = previous.moves;
+  extraTubeUsed = !!previous.extra;
+  selected = null;
+  somCalmo(392, 0.15);
+
+  $("message").textContent =
+    "Último movimento desfeito.";
+
+  render();
+
+});
+
+// REINICIAR
+$("restart").addEventListener("click", () => {
+
+  tubes = clone(initial);
+  moves = 0;
+  history = [];
+  selected = null;
+  extraTubeUsed = false;   // ao reiniciar, o tubo extra pode ser usado de novo
+
+  $("message").textContent =
+    "Fase reiniciada. Tente outra combinação!";
+
+  render();
+
+});
+
+// ADICIONAR TUBO
+$("new").addEventListener("click", () => {
+
+  if(extraTubeUsed) return;
+
+  history.push({
+    tubes: clone(tubes),
+    moves: moves,
+    extra: extraTubeUsed
+  });
+
+  tubes.push([]);
+  somCalmo(660, 0.2);
+  extraTubeUsed = true;
+
+  $("message").textContent =
+    "Um tubo extra para ajudar!";
+
+  render();
+
+});
+
+// PRÓXIMA FASE
+$("next").addEventListener("click", () => {
+  level++;
+  makeLevel();
+});
+
+makeLevel();
+
+})();
+</script>
+
+</body>
+</html>

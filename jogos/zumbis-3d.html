@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Meu Jogo - Zumbis 3D</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080c10;color:#fff;font-family:Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:10px 12px;pointer-events:none;flex-wrap:wrap}
+#titulo{font-weight:900;color:#8bff9a;font-size:16px;text-shadow:0 2px 6px #000;background:#0b1410cc;border:1px solid #47564c;border-radius:12px;padding:8px 12px}
+#stats{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pill{background:#0b1410cc;border:1px solid #47564c;border-radius:12px;padding:8px 11px;font-size:13px;font-weight:bold}
+#msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);color:#aaffb0;font-size:14px;font-weight:bold;text-shadow:0 2px 5px #000;pointer-events:none;text-align:center;max-width:92vw}
+#banner{position:fixed;top:38%;left:50%;transform:translate(-50%,-50%);font-size:clamp(22px,5vw,40px);font-weight:900;color:#aaff99;text-shadow:0 0 18px #3a8a3a,0 3px 0 #000;pointer-events:none;opacity:0;transition:opacity .4s;text-align:center}
+#bossBar{position:fixed;top:96px;left:50%;transform:translateX(-50%);width:min(420px,80vw);height:16px;background:#2a0d10;border:2px solid #ff6a6a;border-radius:10px;overflow:hidden;display:none;pointer-events:none}
+#bossFill{height:100%;width:100%;background:linear-gradient(90deg,#ff3a3a,#ffb347)}
+#bossBar span{position:absolute;inset:0;text-align:center;font-size:11px;font-weight:900;line-height:13px}
+#super{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:#ffe36a;font-weight:900;text-shadow:0 0 10px #ffb300;pointer-events:none;display:none}
+#touch{position:fixed;inset:auto 0 22px 0;display:none;justify-content:space-between;align-items:flex-end;padding:0 20px;pointer-events:none}
+#stick{width:120px;height:120px;border-radius:50%;background:#ffffff18;border:2px solid #ffffff55;position:relative;pointer-events:auto;touch-action:none}
+#knob{width:48px;height:48px;border-radius:50%;background:#8bff9abb;position:absolute;left:34px;top:34px}
+#attack{pointer-events:auto;width:92px;height:92px;border-radius:50%;background:#842b32;border:3px solid #ed7777;color:#fff;font-size:15px;font-weight:900;touch-action:none}
+#attack:active{background:#b33a44}
+@media(pointer:coarse){#touch{display:flex}#super{bottom:150px}}
+#menu{position:fixed;inset:0;z-index:5;background:rgba(3,7,8,.93);display:flex;align-items:center;justify-content:center;padding:15px}
+.panel{width:min(440px,95vw);background:#17231e;border:2px solid #71b77b;border-radius:18px;padding:22px;box-shadow:0 0 35px #4cbb6644;text-align:center}
+.panel h2{color:#92ff9c;font-size:28px;margin:4px 0 10px}
+.panel p{line-height:1.55;color:#d5e5d7;margin:8px 0}
+#start{background:#55b967;color:#07120a;width:100%;border:0;border-radius:12px;padding:14px;font-size:18px;font-weight:900;cursor:pointer}
+.small{font-size:12px;color:#9fb8a3}
+</style>
+</head>
+<body>
+
+<div id="hud">
+ <div id="titulo">🧟 MEU JOGO: ZUMBIS 3D</div>
+ <div id="stats">
+  <div class="pill">❤️ <b id="life">3</b></div>
+  <div class="pill">🏆 <b id="score">0</b></div>
+  <div class="pill">🌎 Fase <b id="phase">1/5</b></div>
+  <div class="pill">🧟 <b id="kills">0</b>/<b id="goal">10</b></div>
+ </div>
+</div>
+<div id="msg">Sobreviva aos zumbis!</div>
+<div id="banner"></div>
+<div id="bossBar"><div id="bossFill"></div><span id="bossNome">CHEFÃO</span></div>
+<div id="super">⚡ SUPER ATAQUE!</div>
+
+<div id="touch">
+ <div id="stick"><div id="knob"></div></div>
+ <button id="attack">⚡<br>ATACAR</button>
+</div>
+
+<div id="menu">
+ <div class="panel">
+  <h2 id="menuTitulo">🧟 MEU JOGO</h2>
+  <p id="menuTexto">O mundo foi tomado pelos zumbis.<br>Sobreviva, derrote os chefões e complete as cinco fases!</p>
+  <p>🌆 Cidades abandonadas<br>🌲 Florestas sombrias<br>🏜️ Deserto perdido • 🧪 Laboratório<br>🧟 Hordas de zumbis • 👹 Chefões especiais<br>❤️ Sistema de vidas e pontuação</p>
+  <button id="start">COMEÇAR A SOBREVIVER</button>
+  <p class="small">PC: WASD ou setas para andar, ESPAÇO ou clique para atacar (mira no mouse).<br>Celular: controle à esquerda para andar e botão ATACAR (mira sozinho).<br>M liga/desliga o som.</p>
+  <p class="small" id="recorde"></p>
+  <p class="small" id="aviso3d">É necessária conexão com a internet para carregar o 3D.</p>
+ </div>
+</div>
+
+<script>
+/* ===== SONS DO FLIPERAMA (gerados pelo navegador, sem arquivos) — tecla M liga/desliga ===== */
+const SOM=(()=>{let A=null,mudo=false;
+ try{mudo=localStorage.getItem('fliperama-mudo')==='1'}catch(e){}
+ function ac(){if(!A){try{A=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(A.state==='suspended')A.resume();return A}
+ ['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,ac,{passive:true}));
+ addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&!e.repeat&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){mudo=!mudo;try{localStorage.setItem('fliperama-mudo',mudo?'1':'0')}catch(err){}}});
+ function tom(f,d,tipo,vol,f2,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const t=a.currentTime+(atraso||0),o=a.createOscillator(),g=a.createGain();o.type=tipo||'square';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol||0.07,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.03)}
+ function ruido(d,vol,freq,atraso){const a=ac();if(!a||mudo||a.state!=='running')return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=freq||1200;g.gain.value=vol||0.15;s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(a.currentTime+(atraso||0))}
+ const seq=(notas,dur,tipo,vol,passo)=>notas.forEach((f,i)=>tom(f,dur,tipo,vol,null,i*(passo||dur*0.7)));
+ return {tom,ruido,seq,
+  pulo:()=>tom(280,0.16,'square',0.06,720),
+  moeda:()=>{tom(988,0.07,'square',0.05);tom(1319,0.2,'square',0.05,null,0.07)},
+  item:()=>seq([660,880,1175],0.1,'triangle',0.08,0.06),
+  clique:()=>tom(700,0.05,'square',0.04),
+  tiro:()=>tom(950,0.09,'square',0.035,180),
+  golpe:()=>{ruido(0.09,0.18,1600);tom(170,0.09,'square',0.05,70)},
+  dano:()=>{tom(240,0.28,'sawtooth',0.07,55);ruido(0.15,0.1,700)},
+  explosao:()=>{ruido(0.55,0.28,550);tom(130,0.45,'sawtooth',0.05,35)},
+  fase:()=>seq([523,659,784,1047],0.13,'square',0.05,0.09),
+  vitoria:()=>seq([523,659,784,1047,1319],0.2,'square',0.055,0.13),
+  derrota:()=>seq([392,330,262,196],0.3,'triangle',0.08,0.2),
+  passo:()=>tom(95,0.05,'triangle',0.035),
+  susto:()=>{tom(80,0.6,'sawtooth',0.07,40);ruido(0.4,0.12,400)},
+  get mudo(){return mudo}};
+})();
+</script>
+<script>
+setTimeout(()=>{if(!window.__zumbisOK){const a=document.getElementById('aviso3d');if(a)a.innerHTML='⚠️ O 3D não carregou. Verifique a internet e recarregue a página.';}},9000);
+</script>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+window.__zumbisOK=true;
+const $=id=>document.getElementById(id);
+
+/* ================= CENA ================= */
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,220);
+const hemi=new THREE.HemisphereLight(0xbfd4ff,0x223322,1.1);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xffffff,1.7);
+sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-32,right:32,top:32,bottom:-32,near:1,far:140});
+scene.add(sun,sun.target);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+
+const M=c=>new THREE.MeshStandardMaterial({color:c,roughness:.85});
+const MB=c=>new THREE.MeshBasicMaterial({color:c});
+const rand=(a,b)=>a+Math.random()*(b-a);
+const ARENA=27;
+
+const TEMAS=[
+ {nome:'Cidade abandonada',ceu:0x1b2f3a,chao:0x3a443f,luz:0xa9bcd8,hemi:1.1},
+ {nome:'Floresta escura',ceu:0x0c1a14,chao:0x24402c,luz:0x7fa08a,hemi:.75},
+ {nome:'Deserto perdido',ceu:0x8a6448,chao:0x9c7c52,luz:0xffd9a0,hemi:1.3},
+ {nome:'Laboratório',ceu:0x0b1820,chao:0x2a3c44,luz:0x9fe0ff,hemi:.9},
+ {nome:'Cidade final',ceu:0x2e0e14,chao:0x3a2a2e,luz:0xff9a7a,hemi:.8}
+];
+
+/* ================= CENÁRIOS ================= */
+let cenario=null,obst=[],fogos=[],ceuMesh=null;
+function caixa(g,w,h,d,mat,x,y,z,sombra=true){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=sombra;m.receiveShadow=true;g.add(m);return m;}
+function cil(g,rt,rb,h,mat,x,y,z,seg=8){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;g.add(m);return m;}
+function pontoAnel(rMin,rMax){const a=rand(0,Math.PI*2),r=rand(rMin,rMax);return[Math.cos(a)*r,Math.sin(a)*r];}
+function pontoDentro(m=2){for(let i=0;i<200;i++){const[x,z]=pontoAnel(5,ARENA-3);if(obst.every(o=>Math.hypot(o.x-x,o.z-z)>o.r+m))return[x,z];}return[0,10];}
+function predio(g,x,z,cores,janela){
+ const w=rand(5,9),h=rand(8,22),d=rand(5,9);
+ const b=caixa(g,w,h,d,M(cores[Math.floor(Math.random()*cores.length)]),x,h/2,z);
+ b.lookAt(0,h/2,0);
+ for(let i=0;i<8;i++){const jw=caixa(g,.9,1.1,.1,Math.random()<.35?janela:MB(0x111418),0,0,0,false);jw.position.set(rand(-w/2+.8,w/2-.8),rand(1.5,h-1),d/2+.06);b.add(jw);}
+}
+function carro(g,x,z,cor){
+ const c=new THREE.Group();c.position.set(x,0,z);c.rotation.y=rand(0,6);g.add(c);
+ caixa(c,2,.8,4,M(cor),0,.7,0);caixa(c,1.7,.7,2,M(0x22303a),0,1.4,-.2);
+ for(const[px,pz]of[[-1,1.3],[1,1.3],[-1,-1.3],[1,-1.3]])cil(c,.38,.38,.3,M(0x111111),px,.38,pz,10).rotation.z=Math.PI/2;
+ obst.push({x,z,r:2.1});
+}
+function arvore(g,x,z,s=1,cor=0x1e3d28){
+ cil(g,.22*s,.32*s,2.6*s,M(0x3d2a1c),x,1.3*s,z,6);
+ for(let i=0;i<3;i++){const c=new THREE.Mesh(new THREE.ConeGeometry((1.9-i*.45)*s,2.2*s,7),M(cor));c.position.set(x,(2.6+i*1.1)*s,z);c.castShadow=true;g.add(c);}
+}
+function barrilFogo(g,x,z){
+ cil(g,.5,.5,1.1,M(0x6a3a22),x,.55,z,10);
+ const f=new THREE.Mesh(new THREE.ConeGeometry(.42,1,8),MB(0xff8a2a));f.position.set(x,1.5,z);g.add(f);
+ const L=new THREE.PointLight(0xff7a2a,18,12,1.6);L.position.set(x,2,z);g.add(L);
+ fogos.push({f,L});obst.push({x,z,r:.7});
+}
+function montarCenario(i){
+ if(cenario){scene.remove(cenario);cenario.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
+ cenario=new THREE.Group();scene.add(cenario);obst=[];fogos=[];
+ const T=TEMAS[i];
+ scene.background=new THREE.Color(T.ceu);
+ scene.fog=new THREE.Fog(T.ceu,30,85);
+ hemi.intensity=T.hemi;sun.color.setHex(T.luz);
+ const chao=new THREE.Mesh(new THREE.PlaneGeometry(220,220),M(T.chao));chao.rotation.x=-Math.PI/2;chao.receiveShadow=true;cenario.add(chao);
+ // anel que marca a arena
+ const anel=new THREE.Mesh(new THREE.RingGeometry(ARENA+.3,ARENA+.9,64),MB(i===3?0x2affd0:0x8a2a2a));anel.rotation.x=-Math.PI/2;anel.position.y=.02;cenario.add(anel);
+ // lua
+ const lua=new THREE.Mesh(new THREE.SphereGeometry(5,20,16),MB(i===4?0xff6a4a:i===2?0xfff2c0:0xdfe6c0));lua.position.set(-50,45,-90);cenario.add(lua);
+ if(i===0||i===4){ // cidades
+  const cores=i===0?[0x4a5560,0x5a5048,0x3c4650,0x605a52]:[0x3a2a2a,0x4a3030,0x2e2228];
+  const janela=MB(i===0?0xffe08a:0xff6a3a);
+  for(let k=0;k<26;k++){const[x,z]=pontoAnel(ARENA+6,ARENA+22);predio(cenario,x,z,cores,janela);}
+  for(let k=0;k<7;k++){const[x,z]=pontoDentro(4);carro(cenario,x,z,[0x8a2a2a,0x2a4a8a,0x6a6a6a,0x8a7a2a][k%4]);}
+  for(let k=0;k<6;k++){const[x,z]=pontoAnel(ARENA-1,ARENA+1);cil(cenario,.1,.12,5,M(0x333333),x,2.5,z,6);const b=new THREE.Mesh(new THREE.SphereGeometry(.3,8,6),MB(0xfff0b0));b.position.set(x,5.1,z);cenario.add(b);}
+  if(i===4)for(let k=0;k<5;k++){const[x,z]=pontoDentro(3);barrilFogo(cenario,x,z);}
+  else for(let k=0;k<3;k++){const[x,z]=pontoDentro(3);barrilFogo(cenario,x,z);}
+ }else if(i===1){ // floresta
+  for(let k=0;k<120;k++){const[x,z]=pontoAnel(ARENA+1,ARENA+30);arvore(cenario,x,z,rand(1,1.8),[0x1a3624,0x1e3d28,0x163020][k%3]);}
+  for(let k=0;k<14;k++){const[x,z]=pontoDentro(3);arvore(cenario,x,z,rand(.9,1.3));obst.push({x,z,r:.7});}
+  for(let k=0;k<25;k++){const[x,z]=pontoAnel(3,ARENA);const c=new THREE.Mesh(new THREE.SphereGeometry(.25,8,6),MB(0x7aff9a));c.position.set(x,.2,z);c.scale.y=.6;cenario.add(c);}
+  for(let k=0;k<3;k++){const[x,z]=pontoDentro(3);barrilFogo(cenario,x,z);}
+ }else if(i===2){ // deserto
+  for(let k=0;k<30;k++){const[x,z]=pontoAnel(ARENA+4,ARENA+30);const d=new THREE.Mesh(new THREE.SphereGeometry(rand(5,10),14,10),M(0xb08a5a));d.position.set(x,-2,z);d.scale.y=.4;cenario.add(d);}
+  for(let k=0;k<12;k++){const[x,z]=pontoDentro(3);const c=new THREE.Group();c.position.set(x,0,z);cenario.add(c);cil(c,.35,.4,3.2,M(0x3f7a3a),0,1.6,0);const b1=cil(c,.22,.22,1.2,M(0x3f7a3a),.6,2,0);b1.rotation.z=-.9;cil(c,.2,.2,1,M(0x3f7a3a),.95,2.6,0);obst.push({x,z,r:.6});}
+  for(let k=0;k<10;k++){const[x,z]=pontoDentro(3);const r=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(.8,1.6)),M(0x8a7058));r.position.set(x,.4,z);r.castShadow=true;cenario.add(r);obst.push({x,z,r:1.2});}
+  for(let k=0;k<6;k++){const[x,z]=pontoAnel(4,ARENA);const o=new THREE.Mesh(new THREE.SphereGeometry(.3,8,6),M(0xeee6d0));o.position.set(x,.2,z);cenario.add(o);}
+ }else{ // laboratório
+  for(let k=0;k<36;k++){const a=k/36*Math.PI*2;const x=Math.cos(a)*(ARENA+3),z=Math.sin(a)*(ARENA+3);const p=caixa(cenario,5,7,1,M(0x3a4a52),x,3.5,z);p.lookAt(0,3.5,0);}
+  const vidro=new THREE.MeshStandardMaterial({color:0x2aff9a,emissive:0x0a6a3a,transparent:true,opacity:.55});
+  for(let k=0;k<8;k++){const[x,z]=pontoDentro(4);cil(cenario,1,1,3.2,vidro,x,1.6,z,16);cil(cenario,1.1,1.1,.3,M(0x555f66),x,.15,z,16);cil(cenario,1.1,1.1,.3,M(0x555f66),x,3.25,z,16);const L=new THREE.PointLight(0x2aff9a,8,8,1.8);L.position.set(x,2,z);cenario.add(L);obst.push({x,z,r:1.2});}
+  for(let k=0;k<10;k++){const[x,z]=pontoDentro(2);caixa(cenario,1.4,1.4,1.4,M(0x6a5a3a),x,.7,z);obst.push({x,z,r:1});}
+  for(let k=-5;k<=5;k++){const l=caixa(cenario,.05,.02,ARENA*2,MB(0x3a5a66),k*5,.03,0,false);const l2=caixa(cenario,ARENA*2,.02,.05,MB(0x3a5a66),0,.03,k*5,false);}
+ }
+}
+
+/* ================= PERSONAGENS ================= */
+function boneco(cfg){
+ // cfg: pele, roupa, calca, escala, braçosFrente
+ const g=new THREE.Group();
+ const pele=M(cfg.pele),roupa=M(cfg.roupa),calca=M(cfg.calca);
+ const mats=[pele,roupa,calca];
+ const corpo=new THREE.Group();g.add(corpo);
+ caixa(corpo,.9,1.1,.5,roupa,0,1.65,0);
+ const cab=caixa(corpo,.65,.65,.6,pele,0,2.55,0);
+ const pernas=[],bracos=[];
+ for(const s of[-1,1]){
+  const pp=new THREE.Group();pp.position.set(.24*s,1.1,0);corpo.add(pp);caixa(pp,.36,1.05,.4,calca,0,-.52,0);pernas.push(pp);
+  const pb=new THREE.Group();pb.position.set(.6*s,2.1,0);corpo.add(pb);caixa(pb,.28,.95,.3,s>0?roupa:pele,0,-.45,0);caixa(pb,.26,.25,.28,pele,0,-.98,0);bracos.push(pb);
+ }
+ g.scale.setScalar(cfg.escala||1);
+ return{g,corpo,cab,pernas,bracos,mats};
+}
+function criarJogador(){
+ const b=boneco({pele:0xe7c7a0,roupa:0x2a6fd4,calca:0x2a3040});
+ caixa(b.corpo,.7,.25,.65,M(0x3a2a1a),0,2.95,0); // cabelo
+ caixa(b.corpo,.6,.7,.3,M(0x5a3a22),0,1.7,-.4); // mochila
+ const olho=MB(0x111111);caixa(b.cab,.1,.1,.05,olho,-.15,.05,.31,false);caixa(b.cab,.1,.1,.05,olho,.15,.05,.31,false);
+ // arma de energia
+ const arma=new THREE.Group();arma.position.set(0,-.9,.25);b.bracos[1].add(arma);
+ caixa(arma,.16,.16,.7,M(0x333a44),0,0,.2);const ponta=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),MB(0x8affff));ponta.position.z=.6;arma.add(ponta);
+ b.ponta=ponta;
+ scene.add(b.g);
+ return b;
+}
+const TIPOS={
+ normal:{pele:0x6a9a5a,hp:1,vel:2.1,raio:.6,escala:1,pontos:10},
+ corredor:{pele:0x8aaa6a,hp:1,vel:3.9,raio:.55,escala:.9,pontos:15},
+ brutamonte:{pele:0x4a7a4a,hp:5,vel:1.6,raio:1,escala:1.55,pontos:30},
+ cuspidor:{pele:0x8a6aa8,hp:2,vel:1.9,raio:.6,escala:1,pontos:20},
+ chefe:{pele:0x5a8a3a,hp:20,vel:1.7,raio:1.8,escala:2.7,pontos:200}
+};
+const ROUPAS=[0x6a4a3a,0x3a4a6a,0x5a5a5a,0x7a3a3a,0x3a5a3a,0x8a7a5a];
+function criarZumbi(tipo,x,z){
+ const T=TIPOS[tipo];
+ const b=boneco({pele:T.pele,roupa:ROUPAS[Math.floor(Math.random()*ROUPAS.length)],calca:0x2a2a30,escala:T.escala});
+ const olho=MB(tipo==='chefe'?0xffd23f:0xff2020);
+ caixa(b.cab,.12,.1,.05,olho,-.15,.06,.31,false);caixa(b.cab,.12,.1,.05,olho,.15,.06,.31,false);
+ caixa(b.cab,.3,.08,.05,MB(0x1a0a0a),0,-.18,.31,false);
+ if(tipo==='chefe'){for(const s of[-1,1]){const c=new THREE.Mesh(new THREE.ConeGeometry(.12,.5,6),M(0xd8cfb0));c.position.set(.25*s,.45,0);c.rotation.z=-.4*s;b.cab.add(c);}}
+ if(tipo==='cuspidor'){const bolsa=new THREE.Mesh(new THREE.SphereGeometry(.3,8,6),M(0xaaff4a));bolsa.position.set(0,-.15,.3);b.cab.add(bolsa);}
+ // braços esticados para frente (pose de zumbi)
+ b.bracos.forEach(p=>p.rotation.x=-1.35);
+ b.g.position.set(x,0,z);
+ scene.add(b.g);
+ const fasesHp=Math.floor((fase-1)*.5);
+ const z0={...b,tipo,hp:T.hp+(tipo==='chefe'?fase*6:tipo==='brutamonte'?fasesHp:0),vel:T.vel*(1+fase*.07)*rand(.9,1.1),raio:T.raio*(T.escala>1?1:1),t:rand(0,6),hit:0,morto:0,ataqueT:rand(1,3),estado:'andar'};
+ z0.hpMax=z0.hp;
+ return z0;
+}
+
+/* ================= ESTADO ================= */
+let estado='menu',fase=1,pontos=0,vidas=3,mortes=0,meta=10;
+let jogador=null,zumbis=[],tiros=[],cuspes=[],drops=[],particulas=[],chefe=null,chefeVencido=false,reforco=false;
+let spawnT=0,ataqueT=0,inv=0,superT=0,bannerT=0,gemidoT=2,passoT=0,msgT=0,ondas=[];
+let recorde=0;try{recorde=+localStorage.getItem('zumbis-recorde')||0;}catch(e){}
+if(recorde)$('recorde').textContent='🏅 Recorde: '+recorde+' pontos';
+const input={};let joy={x:0,y:0};let mouseAlvo=null,mouseUsado=false,atirando=false;
+
+function hud(){
+ $('life').textContent=vidas;$('score').textContent=pontos;$('phase').textContent=fase+'/5';
+ $('kills').textContent=Math.min(mortes,meta);$('goal').textContent=meta;
+}
+function mensagem(t,dur=2.5){$('msg').textContent=t;msgT=dur;}
+function banner(t){$('banner').innerHTML=t;$('banner').style.opacity=1;bannerT=2.4;}
+function limpar(lista){lista.forEach(o=>{scene.remove(o.g||o.mesh);});lista.length=0;}
+
+function comecarFase(n){
+ fase=n;mortes=0;meta=7+n*3;
+ limpar(zumbis);limpar(tiros);limpar(cuspes);limpar(drops);
+ ondas.forEach(o=>scene.remove(o.mesh));ondas=[];
+ chefe=null;chefeVencido=false;reforco=false;
+ $('bossBar').style.display='none';
+ montarCenario(n-1);
+ if(!jogador)jogador=criarJogador();
+ jogador.g.position.set(0,0,0);jogador.g.rotation.y=Math.PI;
+ inv=1.5;superT=0;spawnT=1;
+ hud();
+ banner(`FASE ${n}<br><span style="font-size:.6em">${TEMAS[n-1].nome.toUpperCase()}</span>`);
+ mensagem(`Derrote ${meta} zumbis para chamar o chefão!`);
+ SOM.fase();
+}
+function comecarJogo(){
+ vidas=3;pontos=0;estado='jogando';
+ $('menu').style.display='none';
+ comecarFase(1);
+}
+$('start').addEventListener('click',e=>{e.currentTarget.blur();comecarJogo();});
+function fimDeJogo(venceu){
+ estado='menu';
+ if(pontos>recorde){recorde=pontos;try{localStorage.setItem('zumbis-recorde',recorde);}catch(e){}}
+ $('menu').style.display='flex';
+ $('menuTitulo').textContent=venceu?'🏆 VOCÊ SOBREVIVEU!':'💀 FIM DE JOGO';
+ $('menuTexto').innerHTML=venceu?`Você derrotou os 5 chefões e salvou o mundo!<br>Pontuação: <b>${pontos}</b>`:`Os zumbis te pegaram na fase ${fase}.<br>Pontuação: <b>${pontos}</b>`;
+ $('recorde').textContent='🏅 Recorde: '+recorde+' pontos';
+ $('start').textContent='JOGAR DE NOVO';
+ $('bossBar').style.display='none';
+ venceu?SOM.vitoria():SOM.derrota();
+}
+
+/* ================= SPAWN ================= */
+function tipoAleatorio(){
+ const r=Math.random();
+ if(fase>=4&&r<.18)return'cuspidor';
+ if(fase>=3&&r<.32)return'brutamonte';
+ if(fase>=2&&r<.55)return'corredor';
+ return'normal';
+}
+function pontoBorda(){
+ for(let i=0;i<30;i++){const a=rand(0,Math.PI*2),x=Math.cos(a)*(ARENA-1),z=Math.sin(a)*(ARENA-1);
+  if(Math.hypot(x-jogador.g.position.x,z-jogador.g.position.z)>12)return[x,z];}
+ return[0,-ARENA+1];
+}
+function spawnZumbi(tipo){const[x,z]=pontoBorda();zumbis.push(criarZumbi(tipo||tipoAleatorio(),x,z));}
+function spawnChefe(){
+ const[x,z]=pontoBorda();
+ chefe=criarZumbi('chefe',x,z);zumbis.push(chefe);
+ $('bossBar').style.display='block';$('bossNome').textContent='👹 CHEFÃO DA FASE '+fase;
+ mensagem('⚠️ CHEFÃO APARECEU! DERROTE-O!',3);
+ SOM.tom(100,.8,'sawtooth',.1,60);SOM.ruido(.6,.12,400);
+}
+
+/* ================= ATAQUE ================= */
+const geoTiro=new THREE.SphereGeometry(.22,10,8),matTiro=MB(0x8affff),matTiroS=MB(0xffe36a);
+function alvoAutomatico(){
+ const p=jogador.g.position;let m=null,md=20;
+ for(const z of zumbis){if(z.morto)continue;const d=Math.hypot(z.g.position.x-p.x,z.g.position.z-p.z);if(d<md){md=d;m=z;}}
+ return m;
+}
+function atacar(){
+ if(ataqueT>0)return;
+ const p=jogador.g.position;
+ let ang;
+ if(mouseUsado&&mouseAlvo&&!matchMedia('(pointer:coarse)').matches)ang=Math.atan2(mouseAlvo.x-p.x,mouseAlvo.z-p.z);
+ else{const a=alvoAutomatico();ang=a?Math.atan2(a.g.position.x-p.x,a.g.position.z-p.z):jogador.g.rotation.y;}
+ jogador.g.rotation.y=ang;jogador.mirando=.35;
+ const sup=superT>0;
+ const angs=sup?[ang-.18,ang,ang+.18]:[ang];
+ for(const a of angs){
+  const m=new THREE.Mesh(geoTiro,sup?matTiroS:matTiro);
+  m.position.set(p.x+Math.sin(a)*.9,1.6,p.z+Math.cos(a)*.9);
+  scene.add(m);
+  tiros.push({mesh:m,vx:Math.sin(a)*26,vz:Math.cos(a)*26,vida:.9,dano:sup?2:1});
+ }
+ ataqueT=sup?.15:.3;
+ SOM.tiro();
+}
+function particulasEm(x,y,z,cor,n=8){
+ for(let i=0;i<n;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.15,.15,.15),MB(cor));m.position.set(x,y,z);scene.add(m);particulas.push({mesh:m,vx:rand(-4,4),vy:rand(2,6),vz:rand(-4,4),vida:rand(.4,.8)});}
+}
+function ferirZumbi(z,dano){
+ z.hp-=dano;z.hit=.15;
+ particulasEm(z.g.position.x,1.6*TIPOS[z.tipo].escala,z.g.position.z,0x6aff4a,4);
+ if(z===chefe)$('bossFill').style.width=Math.max(0,z.hp/z.hpMax*100)+'%';
+ SOM.golpe();
+ if(z.hp<=0&&!z.morto){
+  z.morto=1;
+  pontos+=TIPOS[z.tipo].pontos*fase;
+  if(z===chefe){
+   chefe=null;chefeVencido=true;$('bossBar').style.display='none';
+   SOM.explosao();particulasEm(z.g.position.x,2,z.g.position.z,0xffd23f,30);
+   mensagem('🏆 CHEFÃO DERROTADO!',3);
+   zumbis.forEach(o=>{if(!o.morto){o.morto=1;}});
+  }else{
+   mortes++;
+   if(Math.random()<.14){const tipo=vidas<5&&Math.random()<.45?'vida':'super';soltarDrop(tipo,z.g.position.x,z.g.position.z);}
+  }
+  hud();
+ }
+}
+function soltarDrop(tipo,x,z){
+ const g=new THREE.Group();g.position.set(x,1,z);
+ if(tipo==='vida'){const c=new THREE.Mesh(new THREE.SphereGeometry(.35,12,10),MB(0xff3a5a));c.scale.set(1,.9,.6);g.add(c);}
+ else{const c=new THREE.Mesh(new THREE.OctahedronGeometry(.45),MB(0xffe36a));g.add(c);}
+ const aura=new THREE.Mesh(new THREE.RingGeometry(.6,.8,24),MB(tipo==='vida'?0xff3a5a:0xffe36a));aura.rotation.x=-Math.PI/2;aura.position.y=-.95;g.add(aura);
+ scene.add(g);drops.push({g,tipo,t:0});
+}
+function levarDano(){
+ if(inv>0)return;
+ vidas--;inv=1.6;hud();SOM.dano();
+ $('banner').style.opacity=0;
+ document.body.style.boxShadow='inset 0 0 120px #f00';setTimeout(()=>document.body.style.boxShadow='',250);
+ mensagem(vidas>0?`💔 Você foi mordido! Restam ${vidas} vidas`:'',2);
+ if(vidas<=0)fimDeJogo(false);
+}
+
+/* ================= LOOP ================= */
+const relogio=new THREE.Clock();
+const camAlvo=new THREE.Vector3();
+function loop(){
+ requestAnimationFrame(loop);
+ const dt=Math.min(relogio.getDelta(),.05);
+ if(estado==='jogando'&&!window.__foto)atualizar(dt);
+ else if(jogador){jogador.g.rotation.y+=dt*.4;}
+ // câmera
+ if(jogador){const p=jogador.g.position;camAlvo.set(p.x,13.5,p.z-11.5);camera.position.lerp(camAlvo,1-Math.pow(.002,dt));camera.lookAt(p.x,1.2,p.z);
+  sun.position.set(p.x+18,40,p.z-14);sun.target.position.copy(p);}
+ else{camera.position.set(0,14,-12);camera.lookAt(0,0,0);}
+ fogos.forEach((f,i)=>{const s=1+Math.sin(performance.now()/90+i)*.15+Math.random()*.1;f.f.scale.set(s,s,s);f.L.intensity=14+Math.random()*8;});
+ renderer.render(scene,camera);
+}
+function atualizar(dt){
+ const p=jogador.g.position;
+ if(bannerT>0){bannerT-=dt;if(bannerT<=0)$('banner').style.opacity=0;}
+ if(msgT>0){msgT-=dt;if(msgT<=0)$('msg').textContent='';}
+ // movimento (câmera fixa: W vai para longe da câmera)
+ let mx=(input.a||input.arrowleft?1:0)-(input.d||input.arrowright?1:0)-joy.x;
+ let mz=(input.w||input.arrowup?1:0)-(input.s||input.arrowdown?1:0)-joy.y;
+ const L=Math.hypot(mx,mz);if(L>1){mx/=L;mz/=L;}
+ const vel=7.2;
+ if(L>.08){
+  let nx=p.x+mx*vel*dt,nz=p.z+mz*vel*dt;
+  for(const o of obst){const d=Math.hypot(nx-o.x,nz-o.z);if(d<o.r+.55){nx=o.x+(nx-o.x)/d*(o.r+.55);nz=o.z+(nz-o.z)/d*(o.r+.55);}}
+  const dc=Math.hypot(nx,nz);if(dc>ARENA){nx*=ARENA/dc;nz*=ARENA/dc;}
+  p.x=nx;p.z=nz;
+  if(!(jogador.mirando>0))jogador.g.rotation.y=Math.atan2(mx,mz);
+  jogador.t=(jogador.t||0)+dt*11;
+  passoT-=dt;if(passoT<=0){passoT=.3;SOM.passo();}
+ }
+ const sw=L>.08?Math.sin(jogador.t)*.6:0;
+ jogador.pernas[0].rotation.x=sw;jogador.pernas[1].rotation.x=-sw;
+ jogador.bracos[0].rotation.x=-sw*.6;
+ jogador.bracos[1].rotation.x=jogador.mirando>0?-1.5:sw*.6;
+ if(jogador.mirando>0)jogador.mirando-=dt;
+ jogador.g.visible=!(inv>0&&Math.floor(inv*12)%2);
+ jogador.ponta.material.color.setHex(superT>0?0xffe36a:0x8affff);
+ // ataque
+ ataqueT-=dt;
+ if(input[' ']||atirando)atacar();
+ if(inv>0)inv-=dt;
+ if(superT>0){superT-=dt;$('super').style.display='block';$('super').textContent='⚡ SUPER ATAQUE! '+Math.ceil(superT)+'s';}else $('super').style.display='none';
+ // spawns
+ if(mortes<meta&&!chefe&&!chefeVencido){
+  spawnT-=dt;
+  const vivos=zumbis.filter(z=>!z.morto).length;
+  if(spawnT<=0&&vivos<4+fase*2&&vivos+mortes<meta+3){spawnT=Math.max(.5,1.7-fase*.22);spawnZumbi();}
+ }
+ if(mortes>=meta&&!chefe&&!chefeVencido){spawnChefe();}
+ if(chefeVencido&&!chefe&&zumbis.every(z=>z.morto>1.2||!z.morto)){
+  if(fase>=5){fimDeJogo(true);return;}
+  chefeVencido=false;
+  pontos+=vidas*50;
+  banner(`FASE ${fase} COMPLETA!<br><span style="font-size:.6em">+${vidas*50} pontos de bônus</span>`);
+  SOM.vitoria();
+  const prox=fase+1;estado='intervalo';
+  setTimeout(()=>{if(estado==='intervalo'){estado='jogando';comecarFase(prox);}},2600);
+  return;
+ }
+ // zumbis
+ for(let i=zumbis.length-1;i>=0;i--){
+  const z=zumbis[i];const zp=z.g.position;
+  if(z.morto){
+   z.morto+=dt;z.corpo.rotation.x=Math.max(-Math.PI/2,-z.morto*4);zp.y=-Math.max(0,z.morto-.8)*1.5;
+   if(z.morto>1.6){scene.remove(z.g);zumbis.splice(i,1);}
+   continue;
+  }
+  const dx=p.x-zp.x,dz=p.z-zp.z,d=Math.hypot(dx,dz)||1;
+  let vx=dx/d,vz=dz/d,v=z.vel;
+  z.t+=dt*v*2.2;
+  if(z.tipo==='cuspidor'){
+   if(d<8)v=-z.vel*.7;else if(d<11)v=0;
+   z.ataqueT-=dt;
+   if(z.ataqueT<=0&&d<16){z.ataqueT=rand(2,3.2);
+    const m=new THREE.Mesh(new THREE.SphereGeometry(.25,8,6),MB(0xaaff4a));m.position.set(zp.x,1.9,zp.z);scene.add(m);
+    cuspes.push({mesh:m,vx:dx/d*11,vz:dz/d*11,vida:2});SOM.tom(200,.2,'sawtooth',.04,90);}
+  }
+  if(z.tipo==='chefe'){
+   z.ataqueT-=dt;
+   if(z.estado==='andar'&&z.ataqueT<=0){z.estado=Math.random()<.5?'prepararInvestida':'prepararPisao';z.estadoT=.8;}
+   if(z.estado==='prepararInvestida'||z.estado==='prepararPisao'){v=0;z.estadoT-=dt;z.corpo.position.y=Math.abs(Math.sin(z.estadoT*20))*.15;
+    if(z.estadoT<=0){if(z.estado==='prepararInvestida'){z.estado='investida';z.estadoT=1;z.dir={x:vx,z:vz};SOM.tom(90,.6,'sawtooth',.08,140);}
+     else{z.estado='andar';z.ataqueT=rand(3.5,5.5);pisao(zp.x,zp.z);}}}
+   if(z.estado==='investida'){v=z.vel*3.6;vx=z.dir.x;vz=z.dir.z;z.estadoT-=dt;if(z.estadoT<=0){z.estado='andar';z.ataqueT=rand(3.5,5.5);}}
+   if(!reforco&&z.hp<=z.hpMax/2){reforco=true;for(let k=0;k<2+fase;k++)spawnZumbi();mensagem('👹 O chefão chamou reforços!');SOM.tom(120,.5,'sawtooth',.1);}
+  }
+  // separação entre zumbis
+  for(const o of zumbis){if(o===z||o.morto)continue;const ox=zp.x-o.g.position.x,oz=zp.z-o.g.position.z,od=Math.hypot(ox,oz);const min=z.raio+o.raio;if(od<min&&od>0){vx+=ox/od*.8;vz+=oz/od*.8;}}
+  let nx=zp.x+vx*v*dt,nz=zp.z+vz*v*dt;
+  for(const o of obst){const od=Math.hypot(nx-o.x,nz-o.z);if(od<o.r+z.raio){nx=o.x+(nx-o.x)/od*(o.r+z.raio);nz=o.z+(nz-o.z)/od*(o.r+z.raio);}}
+  const dc=Math.hypot(nx,nz);if(dc>ARENA+1){nx*=(ARENA+1)/dc;nz*=(ARENA+1)/dc;}
+  zp.x=nx;zp.z=nz;
+  z.g.rotation.y=Math.atan2(dx,dz);
+  const s=Math.sin(z.t)*.5;z.pernas[0].rotation.x=s;z.pernas[1].rotation.x=-s;
+  z.bracos[0].rotation.x=-1.35+Math.sin(z.t*.7)*.15;z.bracos[1].rotation.x=-1.35-Math.sin(z.t*.7)*.15;
+  z.cab.rotation.z=Math.sin(z.t*.5)*.15;
+  if(z.hit>0){z.hit-=dt;z.mats.forEach(m=>m.emissive.setHex(0x888888));}else z.mats.forEach(m=>m.emissive.setHex(z.estado==='prepararInvestida'||z.estado==='prepararPisao'?0x660000:0));
+  if(d<z.raio+.6){levarDano();if(estado!=='jogando')return;zp.x-=dx/d*1.5;zp.z-=dz/d*1.5;}
+ }
+ // tiros do jogador
+ for(let i=tiros.length-1;i>=0;i--){
+  const t=tiros[i];t.mesh.position.x+=t.vx*dt;t.mesh.position.z+=t.vz*dt;t.vida-=dt;
+  let acabou=t.vida<=0;
+  for(const o of obst)if(Math.hypot(t.mesh.position.x-o.x,t.mesh.position.z-o.z)<o.r){acabou=true;break;}
+  if(!acabou)for(const z of zumbis){if(z.morto)continue;const zp=z.g.position;if(Math.hypot(t.mesh.position.x-zp.x,t.mesh.position.z-zp.z)<z.raio+.35){ferirZumbi(z,t.dano);acabou=true;break;}}
+  if(estado!=='jogando'&&estado!=='intervalo')return;
+  if(acabou){scene.remove(t.mesh);tiros.splice(i,1);}
+ }
+ // cuspes de ácido
+ for(let i=cuspes.length-1;i>=0;i--){
+  const c=cuspes[i];c.mesh.position.x+=c.vx*dt;c.mesh.position.z+=c.vz*dt;c.vida-=dt;
+  let acabou=c.vida<=0;
+  if(Math.hypot(c.mesh.position.x-p.x,c.mesh.position.z-p.z)<.7){levarDano();acabou=true;if(estado!=='jogando'){scene.remove(c.mesh);return;}}
+  if(acabou){scene.remove(c.mesh);cuspes.splice(i,1);}
+ }
+ // ondas do pisão do chefão
+ for(let i=ondas.length-1;i>=0;i--){
+  const o=ondas[i];o.r+=dt*12;o.mesh.scale.setScalar(o.r);o.mesh.material.opacity=Math.max(0,1-o.r/10);
+  const d=Math.hypot(p.x-o.x,p.z-o.z);
+  if(!o.acertou&&Math.abs(d-o.r)<.7){o.acertou=true;levarDano();if(estado!=='jogando')return;}
+  if(o.r>10){scene.remove(o.mesh);ondas.splice(i,1);}
+ }
+ // itens
+ for(let i=drops.length-1;i>=0;i--){
+  const dr=drops[i];dr.t+=dt;dr.g.rotation.y+=dt*2;dr.g.position.y=1+Math.sin(dr.t*4)*.2;
+  if(Math.hypot(dr.g.position.x-p.x,dr.g.position.z-p.z)<1.1){
+   if(dr.tipo==='vida'){vidas=Math.min(5,vidas+1);mensagem('❤️ +1 vida!');}else{superT=6;mensagem('⚡ SUPER ATAQUE por 6 segundos!');}
+   SOM.item();hud();scene.remove(dr.g);drops.splice(i,1);continue;
+  }
+  if(dr.t>14){scene.remove(dr.g);drops.splice(i,1);}
+ }
+ for(let i=particulas.length-1;i>=0;i--){const q=particulas[i];q.mesh.position.x+=q.vx*dt;q.mesh.position.y+=q.vy*dt;q.mesh.position.z+=q.vz*dt;q.vy-=15*dt;q.vida-=dt;if(q.vida<=0||q.mesh.position.y<0){scene.remove(q.mesh);q.mesh.geometry.dispose();particulas.splice(i,1);}}
+ gemidoT-=dt;if(gemidoT<=0&&zumbis.some(z=>!z.morto)){gemidoT=1.5+Math.random()*2.5;SOM.tom(70+Math.random()*50,.6,'sawtooth',.04,55);}
+}
+function pisao(x,z){
+ const m=new THREE.Mesh(new THREE.RingGeometry(.85,1,40),new THREE.MeshBasicMaterial({color:0xff5a3a,transparent:true,side:THREE.DoubleSide}));
+ m.rotation.x=-Math.PI/2;m.position.set(x,.1,z);scene.add(m);
+ ondas.push({mesh:m,x,z,r:1,acertou:false});
+ SOM.explosao();
+}
+
+/* ================= CONTROLES ================= */
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();input[k]=true;if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();if(estado==='menu'&&e.key==='Enter')comecarJogo();});
+addEventListener('keyup',e=>{input[e.key.toLowerCase()]=false;});
+addEventListener('blur',()=>{for(const k in input)input[k]=false;atirando=false;});
+const ray=new THREE.Raycaster(),plano=new THREE.Plane(new THREE.Vector3(0,1,0),0),ndc=new THREE.Vector2();
+function mirarMouse(e){ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);const v=new THREE.Vector3();if(ray.ray.intersectPlane(plano,v))mouseAlvo=v;}
+renderer.domElement.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'){mouseUsado=true;mirarMouse(e);}});
+renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'){mouseUsado=true;mirarMouse(e);atirando=true;}});
+addEventListener('pointerup',e=>{if(e.pointerType==='mouse')atirando=false;});
+const stick=$('stick'),knob=$('knob');let stickId=null;
+stick.addEventListener('pointerdown',e=>{stickId=e.pointerId;stick.setPointerCapture(stickId);moverStick(e);});
+stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId)moverStick(e);});
+function moverStick(e){const r=stick.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const l=Math.hypot(dx,dy),max=40;if(l>max){dx=dx/l*max;dy=dy/l*max;}joy.x=dx/max;joy.y=dy/max;knob.style.transform=`translate(${dx}px,${dy}px)`;}
+function soltarStick(){stickId=null;joy.x=joy.y=0;knob.style.transform='translate(0,0)';}
+stick.addEventListener('pointerup',soltarStick);stick.addEventListener('pointercancel',soltarStick);
+const btn=$('attack');
+btn.addEventListener('pointerdown',e=>{e.preventDefault();btn.setPointerCapture(e.pointerId);atirando=true;mouseUsado=false;});
+btn.addEventListener('pointerup',()=>atirando=false);btn.addEventListener('pointercancel',()=>atirando=false);
+
+// tela de fundo do menu
+montarCenario(0);
+jogador=criarJogador();
+loop();
+window.__zumbis={get estado(){return estado},get zumbis(){return zumbis},get fase(){return fase},get mortes(){return mortes},get vidas(){return vidas},comecarJogo,comecarFase,get jogador(){return jogador},spawnChefe};
+</script>
+</body>
+</html>
