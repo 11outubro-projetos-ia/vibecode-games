@@ -9,3 +9,6 @@ Thumbs.db
 # Respostas do formulário e controle interno (têm nomes completos dos alunos)
 *.csv
 PENDENTES.md
+
+# Configuração local do Claude
+.claude/

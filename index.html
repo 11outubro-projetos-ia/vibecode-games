@@ -246,6 +246,13 @@
   .btn.voltar { box-shadow: 0 0 0 2px var(--rosa); }
   .btn.voltar:hover { background: var(--rosa); }
   .player iframe { flex: 1; width: 100%; border: 0; background: #fff; display: block; }
+  /* celular deitado: barra fina para sobrar mais tela para o jogo */
+  @media (max-height: 520px) {
+    .player-barra { padding: 3px 8px; padding-top: max(3px, env(safe-area-inset-top)); border-bottom-width: 2px; }
+    .player-titulo p { display: none; }
+    .player-titulo h2 { font-size: 9px; }
+    .player .btn { padding: 5px 8px; font-size: 9px; }
+  }
 
   /* ---------- CELULAR ---------- */
   @media (max-width: 640px) {

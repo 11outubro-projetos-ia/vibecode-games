@@ -400,4 +400,5 @@ function loop(t){const dt=Math.max(0,Math.min(.05,(t-last)/1000));last=t;
  if(state==='play')update(dt);else{if(state!=='pause')P.pos=(P.pos+dt*3000)%L;quiet()}
  render();requestAnimationFrame(loop)}
 requestAnimationFrame(loop);
-</script></body></html>
+</script><script src="ajuste-celular.js"></script>
+</body></html>
