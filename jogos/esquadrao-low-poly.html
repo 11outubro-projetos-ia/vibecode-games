@@ -103,6 +103,21 @@
             background: rgba(59, 130, 246, 0.6);
             transform: scale(0.94);
         }
+        /* ---- Celular: controles acima do HUD e HUD no centro, longe dos polegares ---- */
+        #touch-controls { z-index: 30; }
+        body.tela-toque #hud-rodape { justify-content: center; gap: 8px; }
+        body.tela-toque #hud-rodape > div { padding: 4px 10px; }
+        body.tela-toque #hud-hp, body.tela-toque #hud-ammo { font-size: 1.4rem; line-height: 1.6rem; }
+        body.tela-toque #hud-armor { font-size: 1.1rem; }
+        @media (orientation: portrait) {
+            /* em pé: vida e munição sobem para baixo do placar, deixando a mira e os polegares livres */
+            body.tela-toque #hud-rodape { position: absolute; top: 4.6rem; left: 0; right: 0; }
+        }
+        @media (max-height: 430px) {
+            #joystick-zone { bottom: 0.75rem !important; left: 0.75rem !important; width: 8rem !important; height: 8rem !important; }
+            #btn-touch-fire2 { bottom: 9.5rem !important; left: 2.25rem !important; }
+            #acoes-toque { bottom: 0.75rem !important; right: 0.75rem !important; gap: 0.5rem !important; }
+        }
     </style>
 </head>
 <body>
@@ -158,7 +173,7 @@
         <div id="center-msg" class="self-center text-center pointer-events-none"></div>
 
         <!-- Rodapé: Vida, Colete e Munição -->
-        <div class="flex justify-between items-end w-full">
+        <div id="hud-rodape" class="flex justify-between items-end w-full">
             <!-- Vida -->
             <div class="bg-slate-950/80 border border-slate-700/80 rounded-xl px-4 py-2 flex items-center gap-4 font-hud shadow-lg">
                 <div class="flex items-center gap-1.5">
@@ -190,18 +205,25 @@
             <div id="joystick-knob" class="w-14 h-14 rounded-full bg-white/30 border-2 border-white/60 shadow-lg"></div>
         </div>
 
-        <!-- Zona Direita: Área de Rotação da Câmera -->
-        <div id="look-zone" class="pointer-events-auto fixed top-14 right-0 w-1/2 h-3/4"></div>
+        <!-- Zona Direita: Área de Rotação da Câmera (metade direita inteira) -->
+        <div id="look-zone" class="pointer-events-auto fixed top-12 right-0 w-1/2 bottom-0">
+            <div id="look-hint" class="absolute top-[14%] left-1/2 -translate-x-1/2 text-center text-white/70 text-xs font-bold leading-tight pointer-events-none transition-opacity duration-700">
+                <div class="text-2xl">👆</div>ARRASTE AQUI<br>PARA MIRAR
+            </div>
+        </div>
+
+        <!-- Tiro extra do lado esquerdo (atira com o dedão esquerdo enquanto o direito mira) -->
+        <button id="btn-touch-fire2" class="touch-btn pointer-events-auto fixed left-6 w-14 h-14 bg-red-600/60 border-red-400 text-[10px]" style="bottom: 13.5rem">TIRO</button>
 
         <!-- Botões de Ação Direita -->
-        <div class="pointer-events-auto fixed bottom-16 right-4 flex flex-col items-end gap-3">
+        <div id="acoes-toque" class="pointer-events-auto fixed bottom-16 right-4 flex flex-col items-end gap-3">
             <div class="flex gap-2">
                 <button id="btn-touch-switch" class="touch-btn w-12 h-12 text-xs">ARMA</button>
                 <button id="btn-touch-reload" class="touch-btn w-12 h-12 text-xs">R</button>
                 <button id="btn-touch-jump" class="touch-btn w-12 h-12 text-xs">PULO</button>
             </div>
-            <button id="btn-touch-fire" class="touch-btn w-20 h-20 bg-red-600/70 border-red-400 text-sm tracking-wider shadow-xl">
-                ATIRAR
+            <button id="btn-touch-fire" class="touch-btn w-20 h-20 bg-red-600/70 border-red-400 text-sm tracking-wider shadow-xl flex-col leading-none">
+                ATIRAR<span class="text-[8px] font-normal opacity-80 mt-1">arraste p/ mirar</span>
             </button>
         </div>
     </div>
@@ -912,43 +934,116 @@ function updateJoystick(touch) {
     touchState.moveZ = dy / maxR;
 }
 
+// ---- Mira por toque ----
+// Qualquer dedo registrado aqui gira a câmera: o da área de mira E o do botão ATIRAR
+// (dá pra atirar e arrastar o mesmo dedo para corrigir a mira, como nos jogos de celular).
+const lookTouches = {};
+const fireTouches = new Set();
+const LOOK_SENS = 0.0055;
+let lookHintHidden = false;
+
+function lookStart(t) {
+    lookTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+    if (!lookHintHidden) {
+        lookHintHidden = true;
+        const h = document.getElementById('look-hint');
+        if (h) h.style.opacity = '0';
+    }
+}
+function lookMove(t) {
+    const L = lookTouches[t.identifier];
+    if (!L) return;
+    const dx = t.clientX - L.x;
+    const dy = t.clientY - L.y;
+    L.x = t.clientX; L.y = t.clientY;
+    // "atrito" da ajuda de mira: fica mais lenta em cima de um inimigo
+    const sens = LOOK_SENS * (aimAssist.onTarget ? 0.55 : 1);
+    player.yaw -= dx * sens;
+    player.pitch -= dy * sens;
+    player.pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, player.pitch));
+}
+function lookEnd(t) { delete lookTouches[t.identifier]; }
+function updateFiring() { touchState.firing = fireTouches.size > 0; }
+
 lookZone.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    const t = e.changedTouches[0];
-    touchState.lookId = t.identifier;
-    touchState.lastLookX = t.clientX;
-    touchState.lastLookY = t.clientY;
+    for (const t of e.changedTouches) lookStart(t);
 }, { passive: false });
-
 lookZone.addEventListener('touchmove', (e) => {
     e.preventDefault();
-    for (let t of e.changedTouches) {
-        if (t.identifier === touchState.lookId) {
-            const dx = t.clientX - touchState.lastLookX;
-            const dy = t.clientY - touchState.lastLookY;
-            touchState.lastLookX = t.clientX;
-            touchState.lastLookY = t.clientY;
-            player.yaw -= dx * 0.0055;
-            player.pitch -= dy * 0.0055;
-            player.pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, player.pitch));
-        }
-    }
+    for (const t of e.changedTouches) lookMove(t);
 }, { passive: false });
+lookZone.addEventListener('touchend', (e) => { for (const t of e.changedTouches) lookEnd(t); });
+lookZone.addEventListener('touchcancel', (e) => { for (const t of e.changedTouches) lookEnd(t); });
 
-lookZone.addEventListener('touchend', (e) => {
-    for (let t of e.changedTouches) {
-        if (t.identifier === touchState.lookId) touchState.lookId = null;
-    }
-});
-
-document.getElementById('btn-touch-fire').addEventListener('touchstart', (e) => {
+// Botão ATIRAR (direita): atira e também mira arrastando
+const fireBtn = document.getElementById('btn-touch-fire');
+fireBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    touchState.firing = true;
+    for (const t of e.changedTouches) { fireTouches.add(t.identifier); lookStart(t); }
+    updateFiring();
     playerShoot();
-});
-document.getElementById('btn-touch-fire').addEventListener('touchend', () => {
-    touchState.firing = false;
-});
+}, { passive: false });
+fireBtn.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) lookMove(t);
+}, { passive: false });
+function fireEnd(e) {
+    for (const t of e.changedTouches) { fireTouches.delete(t.identifier); lookEnd(t); }
+    updateFiring();
+}
+fireBtn.addEventListener('touchend', fireEnd);
+fireBtn.addEventListener('touchcancel', fireEnd);
+
+// Botão TIRO (esquerda): só atira
+const fireBtn2 = document.getElementById('btn-touch-fire2');
+fireBtn2.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) fireTouches.add(t.identifier);
+    updateFiring();
+    playerShoot();
+}, { passive: false });
+function fire2End(e) {
+    for (const t of e.changedTouches) fireTouches.delete(t.identifier);
+    updateFiring();
+}
+fireBtn2.addEventListener('touchend', fire2End);
+fireBtn2.addEventListener('touchcancel', fire2End);
+
+// ---- Ajuda de mira (só no celular) ----
+// Procura o inimigo visível mais perto da mira. Se estiver perto, deixa a mira mais
+// lenta em cima dele e, enquanto atira, puxa a mira de leve na direção dele.
+const aimAssist = { onTarget: false, _v: new THREE.Vector3(), _ray: new THREE.Raycaster() };
+function updateAimAssist(dt) {
+    aimAssist.onTarget = false;
+    if (!GAME.isMobile || !player.alive) return;
+    const cam = camera.position;
+    let best = null, bestAng = 0.16; // ~9 graus
+    for (const bot of GAME.bots) {
+        if (!bot.alive || bot.team === player.team) continue;
+        const v = aimAssist._v.set(bot.pos.x - cam.x, bot.pos.y + 1.2 - cam.y, bot.pos.z - cam.z);
+        const dist = v.length();
+        if (dist > 70 || dist < 0.5) continue;
+        const yawT = Math.atan2(-v.x, -v.z);
+        const pitchT = Math.atan2(v.y, Math.hypot(v.x, v.z));
+        let dy = yawT - player.yaw;
+        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        const dp = pitchT - player.pitch;
+        const ang = Math.hypot(dy, dp);
+        if (ang < bestAng) { bestAng = ang; best = { dy, dp, dist, v: v.clone() }; }
+    }
+    if (!best) return;
+    // precisa estar à vista (sem parede no meio)
+    aimAssist._ray.set(cam, best.v.clone().normalize());
+    aimAssist._ray.far = best.dist;
+    if (aimAssist._ray.intersectObjects(GAME.mapMeshes, false).length) return;
+    aimAssist.onTarget = true;
+    if (touchState.firing) {
+        const k = Math.min(1, dt * 5);
+        player.yaw += best.dy * k;
+        player.pitch += best.dp * k;
+    }
+}
 document.getElementById('btn-touch-reload').addEventListener('touchstart', (e) => {
     e.preventDefault();
     startReload();
@@ -1465,6 +1560,8 @@ function checkRoundEnd() {
         GAME.state = 'ROUND_OVER';
         isMouseDown = false;
         touchState.firing = false;
+        fireTouches.clear();
+        for (const k in lookTouches) delete lookTouches[k];
         if (document.pointerLockElement) document.exitPointerLock();
 
         const ctWon = trAlive === 0;
@@ -1553,6 +1650,7 @@ function startMatch(resetScores = true) {
 
     if (GAME.isMobile) {
         document.getElementById('touch-controls').classList.remove('hidden');
+        document.body.classList.add('tela-toque');
     } else {
         document.getElementById('pointer-lock-banner').classList.remove('hidden');
         canvas.requestPointerLock();
@@ -1574,6 +1672,7 @@ function returnToMenu() {
     document.getElementById('hud').classList.add('hidden');
     document.getElementById('crosshair').classList.add('hidden');
     document.getElementById('touch-controls').classList.add('hidden');
+    document.body.classList.remove('tela-toque');
     document.getElementById('pointer-lock-banner').classList.add('hidden');
     document.getElementById('main-menu').classList.remove('hidden');
 }
@@ -1591,6 +1690,7 @@ function updatePlayer(dt) {
         // Cooldown de tiro e recarga
         if (player.fireCooldown > 0) player.fireCooldown -= dt;
 
+        updateAimAssist(dt);
         if ((isMouseDown || touchState.firing) && WEAPONS[player.currentWeapon].auto) {
             playerShoot();
         }
