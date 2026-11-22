@@ -113,10 +113,42 @@
             /* em pé: vida e munição sobem para baixo do placar, deixando a mira e os polegares livres */
             body.tela-toque #hud-rodape { position: absolute; top: 4.6rem; left: 0; right: 0; }
         }
+        #touch-controls { --stick: 9rem; --base: 1.25rem; --margem: 1rem; --tiro: 4.5rem; }
+        .stick {
+            position: fixed; bottom: var(--base); width: var(--stick); height: var(--stick);
+            border-radius: 9999px; background: rgba(15, 23, 42, 0.32); border: 2px solid rgba(255, 255, 255, 0.18);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .stick.esq { left: var(--margem); }
+        .stick.dir { right: var(--margem); }
+        .stick-knob {
+            width: 3.5rem; height: 3.5rem; border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.3); border: 2px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 4px 10px rgba(0,0,0,.35); pointer-events: none;
+        }
+        .stick-knob.mira { background: rgba(56, 189, 248, 0.3); border-color: rgba(125, 211, 252, 0.8); }
+        .stick-rotulo {
+            position: absolute; top: 0.45rem; left: 0; right: 0; text-align: center;
+            font-size: 9px; font-weight: 800; letter-spacing: .08em; color: rgba(255,255,255,.55); pointer-events: none;
+        }
+        .tiro {
+            position: fixed; width: var(--tiro); height: var(--tiro);
+            bottom: calc(var(--base) + var(--stick) + 0.6rem);
+            background: rgba(220, 38, 38, 0.7); border-color: rgba(248, 113, 113, 0.9);
+            font-size: 13px; letter-spacing: .05em; box-shadow: 0 6px 16px rgba(0,0,0,.4);
+        }
+        .tiro:active { background: rgba(239, 68, 68, 0.9); }
+        .tiro.esq { left: calc(var(--margem) + (var(--stick) - var(--tiro)) / 2); }
+        .tiro.dir { right: calc(var(--margem) + (var(--stick) - var(--tiro)) / 2); }
+        #acoes-toque {
+            position: fixed; bottom: var(--base); right: calc(var(--margem) + var(--stick) + 0.5rem);
+            display: flex; flex-direction: column; gap: 0.4rem;
+        }
+        .acao { width: 2.7rem; height: 2.7rem; font-size: 10px; }
         @media (max-height: 430px) {
-            #joystick-zone { bottom: 0.75rem !important; left: 0.75rem !important; width: 8rem !important; height: 8rem !important; }
-            #btn-touch-fire2 { bottom: 9.5rem !important; left: 2.25rem !important; }
-            #acoes-toque { bottom: 0.75rem !important; right: 0.75rem !important; gap: 0.5rem !important; }
+            #touch-controls { --stick: 7.5rem; --base: 0.6rem; --margem: 0.75rem; --tiro: 3.75rem; }
+            .acao { width: 2.3rem; height: 2.3rem; font-size: 9px; }
+            #acoes-toque { gap: 0.3rem; }
         }
     </style>
 </head>
@@ -198,33 +230,24 @@
         </div>
     </div>
 
-    <!-- Controles Touch Mobile -->
-    <div id="touch-controls" class="hidden fixed inset-0 pointer-events-none z-25">
-        <!-- Zona Esquerda: Joystick Virtual -->
-        <div id="joystick-zone" class="pointer-events-auto fixed bottom-16 left-4 w-36 h-36 rounded-full bg-slate-900/30 border border-white/15 flex items-center justify-center">
-            <div id="joystick-knob" class="w-14 h-14 rounded-full bg-white/30 border-2 border-white/60 shadow-lg"></div>
+    <!-- Controles Touch Mobile: círculo de andar (esq.), círculo de mirar (dir.) e um TIRO em cima de cada -->
+    <div id="touch-controls" class="hidden fixed inset-0 pointer-events-none">
+        <div id="joystick-zone" class="stick esq pointer-events-auto">
+            <span class="stick-rotulo">ANDAR</span>
+            <div id="joystick-knob" class="stick-knob"></div>
+        </div>
+        <div id="aim-zone" class="stick dir pointer-events-auto">
+            <span class="stick-rotulo">MIRAR</span>
+            <div id="aim-knob" class="stick-knob mira"></div>
         </div>
 
-        <!-- Zona Direita: Área de Rotação da Câmera (metade direita inteira) -->
-        <div id="look-zone" class="pointer-events-auto fixed top-12 right-0 w-1/2 bottom-0">
-            <div id="look-hint" class="absolute top-[14%] left-1/2 -translate-x-1/2 text-center text-white/70 text-xs font-bold leading-tight pointer-events-none transition-opacity duration-700">
-                <div class="text-2xl">👆</div>ARRASTE AQUI<br>PARA MIRAR
-            </div>
-        </div>
+        <button id="btn-touch-fire2" class="touch-btn tiro esq pointer-events-auto">TIRO</button>
+        <button id="btn-touch-fire" class="touch-btn tiro dir pointer-events-auto">TIRO</button>
 
-        <!-- Tiro extra do lado esquerdo (atira com o dedão esquerdo enquanto o direito mira) -->
-        <button id="btn-touch-fire2" class="touch-btn pointer-events-auto fixed left-6 w-14 h-14 bg-red-600/60 border-red-400 text-[10px]" style="bottom: 13.5rem">TIRO</button>
-
-        <!-- Botões de Ação Direita -->
-        <div id="acoes-toque" class="pointer-events-auto fixed bottom-16 right-4 flex flex-col items-end gap-3">
-            <div class="flex gap-2">
-                <button id="btn-touch-switch" class="touch-btn w-12 h-12 text-xs">ARMA</button>
-                <button id="btn-touch-reload" class="touch-btn w-12 h-12 text-xs">R</button>
-                <button id="btn-touch-jump" class="touch-btn w-12 h-12 text-xs">PULO</button>
-            </div>
-            <button id="btn-touch-fire" class="touch-btn w-20 h-20 bg-red-600/70 border-red-400 text-sm tracking-wider shadow-xl flex-col leading-none">
-                ATIRAR<span class="text-[8px] font-normal opacity-80 mt-1">arraste p/ mirar</span>
-            </button>
+        <div id="acoes-toque" class="pointer-events-auto">
+            <button id="btn-touch-switch" class="touch-btn acao">ARMA</button>
+            <button id="btn-touch-reload" class="touch-btn acao">R</button>
+            <button id="btn-touch-jump" class="touch-btn acao">PULO</button>
         </div>
     </div>
 
@@ -890,7 +913,6 @@ const touchState = {
 
 const joyZone = document.getElementById('joystick-zone');
 const joyKnob = document.getElementById('joystick-knob');
-const lookZone = document.getElementById('look-zone');
 
 joyZone.addEventListener('touchstart', (e) => {
     e.preventDefault();
@@ -934,81 +956,79 @@ function updateJoystick(touch) {
     touchState.moveZ = dy / maxR;
 }
 
-// ---- Mira por toque ----
-// Qualquer dedo registrado aqui gira a câmera: o da área de mira E o do botão ATIRAR
-// (dá pra atirar e arrastar o mesmo dedo para corrigir a mira, como nos jogos de celular).
-const lookTouches = {};
+// ---- Círculo de mirar (direita) ----
+// Funciona como o analógico direito de um controle: quanto mais longe do centro, mais rápido gira.
+const aimZone = document.getElementById('aim-zone');
+const aimKnob = document.getElementById('aim-knob');
 const fireTouches = new Set();
-const LOOK_SENS = 0.0055;
-let lookHintHidden = false;
+const AIM_YAW_SPEED = 2.8;   // radianos por segundo com o círculo no máximo
+const AIM_PITCH_SPEED = 1.7;
+touchState.aimId = null;
+touchState.aimX = 0;
+touchState.aimY = 0;
 
-function lookStart(t) {
-    lookTouches[t.identifier] = { x: t.clientX, y: t.clientY };
-    if (!lookHintHidden) {
-        lookHintHidden = true;
-        const h = document.getElementById('look-hint');
-        if (h) h.style.opacity = '0';
-    }
+function updateAimStick(t) {
+    const rect = aimZone.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const maxR = rect.width / 2 - 20;
+    let dx = t.clientX - cx, dy = t.clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxR) { dx = dx / dist * maxR; dy = dy / dist * maxR; }
+    aimKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    touchState.aimX = dx / maxR;
+    touchState.aimY = dy / maxR;
 }
-function lookMove(t) {
-    const L = lookTouches[t.identifier];
-    if (!L) return;
-    const dx = t.clientX - L.x;
-    const dy = t.clientY - L.y;
-    L.x = t.clientX; L.y = t.clientY;
-    // "atrito" da ajuda de mira: fica mais lenta em cima de um inimigo
-    const sens = LOOK_SENS * (aimAssist.onTarget ? 0.55 : 1);
-    player.yaw -= dx * sens;
-    player.pitch -= dy * sens;
+function resetAimStick() {
+    touchState.aimId = null;
+    touchState.aimX = 0;
+    touchState.aimY = 0;
+    aimKnob.style.transform = 'translate(0px, 0px)';
+}
+aimZone.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    touchState.aimId = t.identifier;
+    updateAimStick(t);
+}, { passive: false });
+aimZone.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === touchState.aimId) updateAimStick(t);
+}, { passive: false });
+function aimEnd(e) { for (const t of e.changedTouches) if (t.identifier === touchState.aimId) resetAimStick(); }
+aimZone.addEventListener('touchend', aimEnd);
+aimZone.addEventListener('touchcancel', aimEnd);
+
+// aplica a rotação a cada quadro
+function applyAimStick(dt) {
+    const curva = (v) => {
+        const a = Math.abs(v);
+        if (a < 0.08) return 0;                      // zona morta
+        return Math.sign(v) * Math.pow((a - 0.08) / 0.92, 1.6); // fino perto do centro, rápido na borda
+    };
+    const fric = aimAssist.onTarget ? 0.45 : 1;     // fica mais lenta em cima do inimigo
+    player.yaw -= curva(touchState.aimX) * AIM_YAW_SPEED * fric * dt;
+    player.pitch -= curva(touchState.aimY) * AIM_PITCH_SPEED * fric * dt;
     player.pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, player.pitch));
 }
-function lookEnd(t) { delete lookTouches[t.identifier]; }
+
+// ---- Botões TIRO (um em cima de cada círculo, para o dedo indicador) ----
 function updateFiring() { touchState.firing = fireTouches.size > 0; }
-
-lookZone.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    for (const t of e.changedTouches) lookStart(t);
-}, { passive: false });
-lookZone.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    for (const t of e.changedTouches) lookMove(t);
-}, { passive: false });
-lookZone.addEventListener('touchend', (e) => { for (const t of e.changedTouches) lookEnd(t); });
-lookZone.addEventListener('touchcancel', (e) => { for (const t of e.changedTouches) lookEnd(t); });
-
-// Botão ATIRAR (direita): atira e também mira arrastando
-const fireBtn = document.getElementById('btn-touch-fire');
-fireBtn.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    for (const t of e.changedTouches) { fireTouches.add(t.identifier); lookStart(t); }
-    updateFiring();
-    playerShoot();
-}, { passive: false });
-fireBtn.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    for (const t of e.changedTouches) lookMove(t);
-}, { passive: false });
-function fireEnd(e) {
-    for (const t of e.changedTouches) { fireTouches.delete(t.identifier); lookEnd(t); }
-    updateFiring();
-}
-fireBtn.addEventListener('touchend', fireEnd);
-fireBtn.addEventListener('touchcancel', fireEnd);
-
-// Botão TIRO (esquerda): só atira
-const fireBtn2 = document.getElementById('btn-touch-fire2');
-fireBtn2.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    for (const t of e.changedTouches) fireTouches.add(t.identifier);
-    updateFiring();
-    playerShoot();
-}, { passive: false });
-function fire2End(e) {
-    for (const t of e.changedTouches) fireTouches.delete(t.identifier);
-    updateFiring();
-}
-fireBtn2.addEventListener('touchend', fire2End);
-fireBtn2.addEventListener('touchcancel', fire2End);
+['btn-touch-fire', 'btn-touch-fire2'].forEach((id) => {
+    const b = document.getElementById(id);
+    b.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        for (const t of e.changedTouches) fireTouches.add(t.identifier);
+        updateFiring();
+        playerShoot();
+    }, { passive: false });
+    const fim = (e) => {
+        for (const t of e.changedTouches) fireTouches.delete(t.identifier);
+        updateFiring();
+    };
+    b.addEventListener('touchend', fim);
+    b.addEventListener('touchcancel', fim);
+});
 
 // ---- Ajuda de mira (só no celular) ----
 // Procura o inimigo visível mais perto da mira. Se estiver perto, deixa a mira mais
@@ -1561,7 +1581,7 @@ function checkRoundEnd() {
         isMouseDown = false;
         touchState.firing = false;
         fireTouches.clear();
-        for (const k in lookTouches) delete lookTouches[k];
+        resetAimStick();
         if (document.pointerLockElement) document.exitPointerLock();
 
         const ctWon = trAlive === 0;
@@ -1691,6 +1711,7 @@ function updatePlayer(dt) {
         if (player.fireCooldown > 0) player.fireCooldown -= dt;
 
         updateAimAssist(dt);
+        applyAimStick(dt);
         if ((isMouseDown || touchState.firing) && WEAPONS[player.currentWeapon].auto) {
             playerShoot();
         }
